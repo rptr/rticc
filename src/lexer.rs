@@ -2,19 +2,19 @@ use core::num;
 use std::{fs, iter::Peekable};
 
 #[derive(Debug, PartialEq)]
-enum Constant {
+pub(crate) enum Constant {
     Int(u64),
     String(String),
 }
 
 #[derive(Debug, PartialEq)]
-enum Keyword {
+pub(crate) enum Keyword {
     Int,
     Return,
 }
 
 #[derive(Debug, PartialEq)]
-enum Token {
+pub(crate) enum Token {
     Identifier(String),
     Constant(Constant),
     Keyword(Keyword),
@@ -25,13 +25,13 @@ enum Token {
     Semicolon,
 }
 
-pub fn lex_file(filename: &str) -> Vec<Token> {
+pub(crate) fn lex_file(filename: &str) -> Vec<Token> {
     let entire_file = fs::read_to_string(filename).unwrap();
 
     lex(entire_file)
 }
 
-pub fn lex(s: String) -> Vec<Token> {
+fn lex(s: String) -> Vec<Token> {
     let mut tokens = vec![];
     let mut chars = s.chars().peekable();
 
@@ -56,6 +56,8 @@ pub fn lex(s: String) -> Vec<Token> {
             tokens.push(Token::Semicolon);
         } else if ch.is_whitespace() {
             continue;
+        } else if ch == '/' {
+            comment(&mut chars);
         } else {
             panic!("lexing: invalid character: {ch}");
         }
@@ -144,6 +146,33 @@ fn string_literal(
     }
 
     panic!("lexing string literal: unterminated string literal");
+}
+
+fn comment(chars: &mut Peekable<impl Iterator<Item = char>>) {
+    let next = *chars.peek().unwrap();
+
+    if next == '/' {
+        while let Some(ch) = chars.next() {
+            if ch == '\n' {
+                break;
+            }
+        }
+    } else if next == '*' {
+        chars.next();
+
+        while let Some(ch) = chars.next() {
+            if ch == '*' {
+                if let Some(next) = chars.peek() {
+                    if *next == '/' {
+                        chars.next();
+                        break;
+                    }
+                }
+            }
+        }
+    } else {
+        panic!("lexing comment: invalid character: {next}");
+    }
 }
 
 #[cfg(test)]
