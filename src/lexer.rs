@@ -191,4 +191,46 @@ mod tests {
             ]
         );
     }
+
+    #[test]
+    fn test_lex_single_line_comment() {
+        let src = "// this is a comment\nreturn 1;".to_string();
+        let tokens = lex(src);
+        assert_eq!(
+            tokens,
+            vec![
+                Token::Keyword(Keyword::Return),
+                Token::Constant(Constant::Int(1)),
+                Token::Semicolon,
+            ]
+        );
+    }
+
+    #[test]
+    fn test_lex_multiline_comment() {
+        let src = "/* this is\na multiline comment */return 2;".to_string();
+        let tokens = lex(src);
+        assert_eq!(
+            tokens,
+            vec![
+                Token::Keyword(Keyword::Return),
+                Token::Constant(Constant::Int(2)),
+                Token::Semicolon,
+            ]
+        );
+    }
+
+    #[test]
+    fn test_lex_return_string() {
+        let src = r#"return "hello";"#.to_string();
+        let tokens = lex(src);
+        assert_eq!(
+            tokens,
+            vec![
+                Token::Keyword(Keyword::Return),
+                Token::Constant(Constant::String("hello".to_string())),
+                Token::Semicolon,
+            ]
+        );
+    }
 }
