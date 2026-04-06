@@ -1,4 +1,3 @@
-use core::num;
 use std::{fs, iter::Peekable};
 
 #[derive(Debug, PartialEq)]
@@ -36,14 +35,12 @@ fn lex(s: String) -> Vec<Token> {
     let mut chars = s.chars().peekable();
 
     while let Some(ch) = chars.next() {
-        // use chars.peek() to look ahead without consuming
-
         if ch.is_numeric() {
             number(ch, &mut chars, &mut tokens);
         } else if ch.is_alphabetic() {
             identifier(ch, &mut chars, &mut tokens);
         } else if ch == '"' {
-            string_literal(ch, &mut chars, &mut tokens);
+            string_literal(&mut chars, &mut tokens);
         } else if ch == '{' {
             tokens.push(Token::OpenCurly);
         } else if ch == '}' {
@@ -129,11 +126,7 @@ fn keyword(str: &str) -> Option<Keyword> {
     }
 }
 
-fn string_literal(
-    ch: char,
-    chars: &mut Peekable<impl Iterator<Item = char>>,
-    tokens: &mut Vec<Token>,
-) {
+fn string_literal(chars: &mut Peekable<impl Iterator<Item = char>>, tokens: &mut Vec<Token>) {
     let mut string_literal_str = String::new();
 
     while let Some(ch) = chars.next() {
