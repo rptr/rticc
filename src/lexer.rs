@@ -10,6 +10,7 @@ pub(crate) enum Constant {
 pub(crate) enum Keyword {
     Int,
     Return,
+    Void,
 }
 
 #[derive(Debug, PartialEq)]
