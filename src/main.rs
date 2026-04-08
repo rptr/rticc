@@ -1,3 +1,4 @@
+pub mod codegen;
 pub mod lexer;
 pub mod parser;
 
@@ -6,6 +7,9 @@ fn main() {
 
     if let Some(filename) = args.get(1) {
         let tokens = lexer::lex_file(filename);
-        let _ = parser::parse(tokens);
+        let ast = parser::parse(tokens);
+        let asm = codegen::generate(ast);
+
+        println!("{asm}");
     }
 }

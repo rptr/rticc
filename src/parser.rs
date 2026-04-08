@@ -1,12 +1,12 @@
 use crate::lexer::{Constant, Keyword, Token};
 
 pub(crate) struct Program {
-    func: FunctionDefinition,
+    pub(crate) func: FunctionDefinition,
 }
 
 pub(crate) struct FunctionDefinition {
-    name: String,
-    body: Vec<Statement>,
+    pub(crate) name: String,
+    pub(crate) body: Vec<Statement>,
 }
 
 pub(crate) enum Statement {
