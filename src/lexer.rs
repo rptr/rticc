@@ -123,6 +123,7 @@ fn keyword(str: &str) -> Option<Keyword> {
     match str {
         "int" => Some(Keyword::Int),
         "return" => Some(Keyword::Return),
+        "void" => Some(Keyword::Void),
         _ => None,
     }
 }

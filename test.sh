@@ -10,7 +10,7 @@ if [ -z "$1" ]; then
 fi
 
 find "$1" -type f | sort | while read -r file; do
-    if ./target/debug/rticc "$file"; then
+    if RUST_BACKTRACE=1 ./target/debug/rticc "$file"; then
         echo -e "${GREEN}PASS${NC}: $file"
     else
         echo -e "${RED}FAIL${NC}: $file"
