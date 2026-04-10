@@ -64,8 +64,8 @@ pub(crate) enum Token {
     Minus,
     BitwiseNegation,
     LogicalNegation,
-    Slash,
-    Percent,
+    Division,
+    Modulo,
     BitwiseLeftShift,
     BitwiseRightShift,
     LessThan,
@@ -107,32 +107,264 @@ fn lex(s: String) -> Vec<Token> {
     let mut chars = s.chars().peekable();
 
     while let Some(ch) = chars.next() {
-        if ch.is_numeric() {
-            number(ch, &mut chars, &mut tokens);
-        } else if ch.is_alphabetic() {
-            identifier(ch, &mut chars, &mut tokens);
-        } else if ch == '"' {
-            string_literal(&mut chars, &mut tokens);
-        } else if ch == '{' {
-            tokens.push(Token::OpenCurly);
-        } else if ch == '}' {
-            tokens.push(Token::CloseCurly);
-        } else if ch == '(' {
-            tokens.push(Token::OpenParen);
-        } else if ch == ')' {
-            tokens.push(Token::CloseParen);
-        } else if ch == ';' {
-            tokens.push(Token::Semicolon);
-        } else if ch.is_whitespace() {
-            continue;
-        } else if ch == '/' {
-            comment(&mut chars);
-        } else {
-            panic!("lexing: invalid character: {ch}");
+        match ch {
+            c if c.is_numeric() => number(ch, &mut chars, &mut tokens),
+            c if c.is_alphabetic() => identifier(ch, &mut chars, &mut tokens),
+            '"' => string_literal(&mut chars, &mut tokens),
+            '{' => tokens.push(Token::OpenCurly),
+            '}' => tokens.push(Token::CloseCurly),
+            '(' => tokens.push(Token::OpenParen),
+            ')' => tokens.push(Token::CloseParen),
+            '[' => tokens.push(Token::OpenBracket),
+            ']' => tokens.push(Token::CloseBracket),
+            '.' => tokens.push(Token::Period),
+            ';' => tokens.push(Token::Semicolon),
+            '*' => {
+                let peek = chars.peek();
+
+                if let Some(next) = peek {
+                    if *next == '=' {
+                        chars.next();
+                        tokens.push(Token::MultiplyAssignment);
+                    } else {
+                        tokens.push(Token::Asterisk);
+                    }
+                } else {
+                    panic!("lexer: unexpected end of input after '*'");
+                }
+            }
+            '~' => tokens.push(Token::BitwiseNegation),
+            '/' => {
+                let peek = chars.peek();
+
+                if let Some(next) = peek {
+                    if *next == '=' {
+                        chars.next();
+                        tokens.push(Token::DivideAssignment);
+                    } else if *next == '/' || *next == '*' {
+                        comment(&mut chars);
+                    } else {
+                        tokens.push(Token::Division);
+                    }
+                } else {
+                    panic!("lexer: unexpected end of input after '/'");
+                }
+            }
+            '%' => {
+                let peek = chars.peek();
+
+                if let Some(next) = peek {
+                    if *next == '=' {
+                        chars.next();
+                        tokens.push(Token::ModuloAssignment);
+                    } else {
+                        tokens.push(Token::Modulo);
+                    }
+                } else {
+                    panic!("lexer: unexpected end of input after '%'");
+                }
+            }
+            ',' => tokens.push(Token::Comma),
+            '^' => {
+                let peek = chars.peek();
+
+                if let Some(next) = peek {
+                    if *next == '=' {
+                        chars.next();
+                        tokens.push(Token::BitwiseXorAssignment);
+                    } else {
+                        tokens.push(Token::BitwiseXor);
+                    }
+                } else {
+                    panic!("lexer: unexpected end of input after '^'");
+                }
+            }
+            '?' => tokens.push(Token::QuestionMark),
+            ':' => tokens.push(Token::Colon),
+            '&' => {
+                let peek = chars.peek();
+
+                if let Some(next) = peek {
+                    if *next == '&' {
+                        chars.next();
+                        tokens.push(Token::LogicalAnd);
+                    } else if *next == '=' {
+                        chars.next();
+                        tokens.push(Token::BitwiseAndAssignment);
+                    } else {
+                        tokens.push(Token::BitwiseAnd);
+                    }
+                } else {
+                    panic!("lexer: unexpected end of input after '&'");
+                }
+            }
+            '!' => {
+                let peek = chars.peek();
+
+                if let Some(next) = peek {
+                    if *next == '=' {
+                        chars.next();
+                        tokens.push(Token::NotEqual);
+                    } else {
+                        tokens.push(Token::LogicalNegation);
+                    }
+                } else {
+                    panic!("lexer: unexpected end of input after '!'");
+                }
+            }
+            '|' => {
+                let peek = chars.peek();
+
+                if let Some(next) = peek {
+                    if *next == '|' {
+                        chars.next();
+                        tokens.push(Token::LogicalOr);
+                    } else if *next == '=' {
+                        chars.next();
+                        tokens.push(Token::BitwiseOrAssignment);
+                    } else {
+                        tokens.push(Token::BitwiseOr);
+                    }
+                } else {
+                    panic!("lexer: unexpected end of input after '|'");
+                }
+            }
+            '<' => {
+                less_than(&mut chars, &mut tokens);
+            }
+            '>' => {
+                greater_than(&mut chars, &mut tokens);
+            }
+            '=' => {
+                let peek = chars.peek();
+
+                if let Some(next) = peek {
+                    if *next == '=' {
+                        chars.next();
+                        tokens.push(Token::Equal);
+                    } else {
+                        tokens.push(Token::Assignment);
+                    }
+                } else {
+                    panic!("lexer: unexpected end of input after '='");
+                }
+            }
+            '-' => {
+                let peek = chars.peek();
+
+                if let Some(next) = peek {
+                    if *next == '>' {
+                        chars.next();
+                        tokens.push(Token::Arrow);
+                    } else if *next == '-' {
+                        chars.next();
+                        tokens.push(Token::MinusMinus);
+                    } else if *next == '=' {
+                        chars.next();
+                        tokens.push(Token::SubtractAssignment);
+                    } else {
+                        tokens.push(Token::Minus);
+                    }
+                } else {
+                    panic!("lexer: unexpected end of input after '-'");
+                }
+            }
+            '+' => {
+                let peek = chars.peek();
+
+                if let Some(next) = peek {
+                    if *next == '+' {
+                        chars.next();
+                        tokens.push(Token::PlusPlus);
+                    } else if *next == '=' {
+                        chars.next();
+                        tokens.push(Token::AddAssignment);
+                    } else {
+                        tokens.push(Token::Plus);
+                    }
+                } else {
+                    panic!("lexer: unexpected end of input after '+'");
+                }
+            }
+            '#' => {
+                let peek = chars.peek();
+
+                if let Some(next) = peek {
+                    if *next == '#' {
+                        chars.next();
+                        tokens.push(Token::HashHash);
+                    } else {
+                        tokens.push(Token::Hash);
+                    }
+                } else {
+                    panic!("lexer: unexpected end of input after '#'");
+                }
+            }
+            c if c.is_whitespace() => continue,
+            _ => panic!("lexing: invalid character: {ch}"),
         }
     }
 
     tokens
+}
+
+fn less_than(chars: &mut Peekable<std::str::Chars<'_>>, tokens: &mut Vec<Token>) {
+    let peek = chars.peek();
+
+    if let Some(next) = peek {
+        if *next == '<' {
+            chars.next();
+
+            if chars.peek() == Some(&'=') {
+                chars.next();
+
+                if chars.peek() == Some(&'=') {
+                    chars.next();
+                    tokens.push(Token::BitwiseLeftShiftAssignment);
+                } else {
+                    panic!("lexer: unexpected character after '<<=': expected '='");
+                }
+            } else {
+                tokens.push(Token::BitwiseLeftShift);
+            }
+        } else if *next == '=' {
+            chars.next();
+            tokens.push(Token::LessThanOrEqual);
+        } else {
+            tokens.push(Token::LessThan);
+        }
+    } else {
+        panic!("lexer: unexpected end of input after '<'");
+    }
+}
+
+fn greater_than(chars: &mut Peekable<std::str::Chars<'_>>, tokens: &mut Vec<Token>) {
+    let peek = chars.peek();
+    if let Some(next) = peek {
+        if *next == '>' {
+            chars.next();
+
+            if chars.peek() == Some(&'=') {
+                chars.next();
+
+                if chars.peek() == Some(&'=') {
+                    chars.next();
+                    tokens.push(Token::BitwiseRightShiftAssignment);
+                } else {
+                    panic!("lexer: unexpected character after '>>=': expected '='");
+                }
+            } else {
+                tokens.push(Token::BitwiseRightShift);
+            }
+        } else if *next == '=' {
+            chars.next();
+            tokens.push(Token::GreaterThanOrEqual);
+        } else {
+            tokens.push(Token::GreaterThan);
+        }
+    } else {
+        panic!("lexer: unexpected end of input after '>'");
+    }
 }
 
 fn number(ch: char, chars: &mut Peekable<impl Iterator<Item = char>>, tokens: &mut Vec<Token>) {
