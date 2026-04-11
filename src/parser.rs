@@ -17,6 +17,18 @@ pub(crate) enum Statement {
 pub(crate) enum Expression {
     IntegerLiteral(u64),
     Identifier(String),
+    UnaryOperation(Operator, Box<Expression>),
+}
+
+pub(crate) enum Operator {
+    NumericNegation,
+    LogicalNegation,
+    BitwiseNegation,
+    Sizeof,
+    PrefixIncrement,
+    PrefixDecrement,
+    AddressOf,
+    Dereference,
 }
 
 struct Parser {
@@ -95,18 +107,65 @@ fn parse_statement(parser: &mut Parser) -> Statement {
         parser.next();
         Statement::Return(None)
     } else {
-        let t = parser.next();
-
-        let n = if let Some(Token::Constant(Constant::Int(n))) = t {
-            *n
-        } else {
-            panic!("expected integer literal after return");
-        };
+        let expr = parse_expression(parser);
 
         parser.expect(&Token::Semicolon);
 
-        return Statement::Return(Some(Expression::IntegerLiteral(n)));
+        return Statement::Return(Some(expr));
     }
+}
+
+fn parse_expression(parser: &mut Parser) -> Expression {
+    let t = parser.next();
+
+    if t.is_none() {
+        panic!("unexpected end of input while parsing expression");
+    }
+
+    let expr = match t.unwrap() {
+        Token::OpenParen => {
+            let expr = parse_expression(parser);
+            parser.expect(&Token::CloseParen);
+            expr
+        }
+        Token::Constant(Constant::Int(n)) => Expression::IntegerLiteral(*n),
+        Token::Identifier(name) => Expression::Identifier(name.clone()),
+        Token::Minus => {
+            let operand = parse_expression(parser);
+            Expression::UnaryOperation(Operator::NumericNegation, Box::new(operand))
+        }
+        Token::LogicalNegation => {
+            let operand = parse_expression(parser);
+            Expression::UnaryOperation(Operator::LogicalNegation, Box::new(operand))
+        }
+        Token::BitwiseNegation => {
+            let operand = parse_expression(parser);
+            Expression::UnaryOperation(Operator::BitwiseNegation, Box::new(operand))
+        }
+        Token::Keyword(Keyword::Sizeof) => {
+            let operand = parse_expression(parser);
+            Expression::UnaryOperation(Operator::Sizeof, Box::new(operand))
+        }
+        Token::PlusPlus => {
+            let operand = parse_expression(parser);
+            Expression::UnaryOperation(Operator::PrefixIncrement, Box::new(operand))
+        }
+        Token::MinusMinus => {
+            let operand = parse_expression(parser);
+            Expression::UnaryOperation(Operator::PrefixDecrement, Box::new(operand))
+        }
+        Token::BitwiseAnd => {
+            let operand = parse_expression(parser);
+            Expression::UnaryOperation(Operator::AddressOf, Box::new(operand))
+        }
+        Token::Asterisk => {
+            let operand = parse_expression(parser);
+            Expression::UnaryOperation(Operator::Dereference, Box::new(operand))
+        }
+        _ => panic!("unexpected token in expression: {:?}", t),
+    };
+
+    expr
 }
 
 #[cfg(test)]
