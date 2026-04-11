@@ -1,7 +1,4 @@
-use crate::{
-    lexer::Constant,
-    parser::{Expression, Program, Statement},
-};
+use crate::parser::{Expression, Program, Statement};
 
 pub(crate) fn generate(program: Program) -> String {
     let mut result = String::new();
