@@ -14,11 +14,13 @@ fn main() {
 
         std::fs::write("temp.s", asm).unwrap();
 
+        let out_name = filename.strip_suffix(".c").unwrap_or("out");
+
         let _ = Command::new("gcc")
-            .args(["temp.s", "-o", "out"])
+            .args(["temp.s", "-o", out_name])
             .output()
             .expect("could not execute gcc");
 
-        std::fs::remove_file("temp.s").unwrap();
+        // std::fs::remove_file("temp.s").unwrap();
     }
 }
