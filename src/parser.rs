@@ -18,6 +18,10 @@ pub(crate) enum Expression {
     IntegerLiteral(u64),
     Identifier(String),
     UnaryOperation(Operator, Box<Expression>),
+    Addition(Box<Expression>, Box<Expression>),
+    Subtraction(Box<Expression>, Box<Expression>),
+    Multiplication(Box<Expression>, Box<Expression>),
+    Division(Box<Expression>, Box<Expression>),
 }
 
 pub(crate) enum Operator {
@@ -116,13 +120,52 @@ fn parse_statement(parser: &mut Parser) -> Statement {
 }
 
 fn parse_expression(parser: &mut Parser) -> Expression {
+    let mut term = parse_term(parser);
+
+    while matches!(parser.peek(), Some(Token::Plus) | Some(Token::Minus)) {
+        let is_addition = matches!(parser.peek(), Some(Token::Plus));
+
+        parser.next();
+
+        let next_term = parse_term(parser);
+
+        term = if is_addition {
+            Expression::Addition(Box::new(term), Box::new(next_term))
+        } else {
+            Expression::Subtraction(Box::new(term), Box::new(next_term))
+        };
+    }
+
+    term
+}
+
+fn parse_term(parser: &mut Parser) -> Expression {
+    let factor = parse_factor(parser);
+    let next = parser.peek();
+
+    match next {
+        Some(Token::Asterisk) => {
+            parser.next();
+            let rhs = parse_term(parser);
+            Expression::Multiplication(Box::new(factor), Box::new(rhs))
+        }
+        Some(Token::Division) => {
+            parser.next();
+            let rhs = parse_term(parser);
+            Expression::Division(Box::new(factor), Box::new(rhs))
+        }
+        _ => factor,
+    }
+}
+
+fn parse_factor(parser: &mut Parser) -> Expression {
     let t = parser.next();
 
     if t.is_none() {
-        panic!("unexpected end of input while parsing expression");
+        panic!("unexpected end of input while parsing factor");
     }
 
-    let expr = match t.unwrap() {
+    match t.unwrap() {
         Token::OpenParen => {
             let expr = parse_expression(parser);
             parser.expect(&Token::CloseParen);
@@ -162,10 +205,8 @@ fn parse_expression(parser: &mut Parser) -> Expression {
             let operand = parse_expression(parser);
             Expression::UnaryOperation(Operator::Dereference, Box::new(operand))
         }
-        _ => panic!("unexpected token in expression: {:?}", t),
-    };
-
-    expr
+        _ => panic!("unexpected token in factor: {:?}", t),
+    }
 }
 
 #[cfg(test)]
@@ -234,7 +275,320 @@ mod tests {
         let stmt = parse_statement(&mut parser);
         match stmt {
             Statement::Return(Some(Expression::IntegerLiteral(n))) => assert_eq!(n, 100),
-            _ => panic!("expected Return(IntegerLiteral(0))"),
+            _ => panic!("expected Return(IntegerLiteral(100))"),
+        }
+    }
+
+    #[test]
+    fn test_parse_statement_return_addition() {
+        let tokens = vec![
+            Token::Keyword(Keyword::Return),
+            Token::Constant(Constant::Int(9)),
+            Token::Plus,
+            Token::Constant(Constant::Int(11)),
+            Token::Semicolon,
+        ];
+        let mut parser = make_parser(tokens);
+        let stmt = parse_statement(&mut parser);
+
+        match stmt {
+            Statement::Return(Some(Expression::Addition(lhs, rhs))) => match (*lhs, *rhs) {
+                (Expression::IntegerLiteral(9), Expression::IntegerLiteral(11)) => {}
+                _ => panic!("expected Addition(9, 11)"),
+            },
+            _ => panic!("expected Return(Addition(..))"),
+        }
+    }
+
+    #[test]
+    fn test_parse_statement_return_subtraction() {
+        let tokens = vec![
+            Token::Keyword(Keyword::Return),
+            Token::Constant(Constant::Int(10)),
+            Token::Minus,
+            Token::Constant(Constant::Int(3)),
+            Token::Semicolon,
+        ];
+        let mut parser = make_parser(tokens);
+        let stmt = parse_statement(&mut parser);
+
+        match stmt {
+            Statement::Return(Some(Expression::Subtraction(lhs, rhs))) => match (*lhs, *rhs) {
+                (Expression::IntegerLiteral(10), Expression::IntegerLiteral(3)) => {}
+                _ => panic!("expected Subtraction(10, 3)"),
+            },
+            _ => panic!("expected Return(Subtraction(..))"),
+        }
+    }
+
+    #[test]
+    fn test_parse_statement_return_multiplication() {
+        let tokens = vec![
+            Token::Keyword(Keyword::Return),
+            Token::Constant(Constant::Int(4)),
+            Token::Asterisk,
+            Token::Constant(Constant::Int(5)),
+            Token::Semicolon,
+        ];
+        let mut parser = make_parser(tokens);
+        let stmt = parse_statement(&mut parser);
+
+        match stmt {
+            Statement::Return(Some(Expression::Multiplication(lhs, rhs))) => match (*lhs, *rhs) {
+                (Expression::IntegerLiteral(4), Expression::IntegerLiteral(5)) => {}
+                _ => panic!("expected Multiplication(4, 5)"),
+            },
+            _ => panic!("expected Return(Multiplication(..))"),
+        }
+    }
+
+    #[test]
+    fn test_parse_statement_return_division() {
+        let tokens = vec![
+            Token::Keyword(Keyword::Return),
+            Token::Constant(Constant::Int(20)),
+            Token::Division,
+            Token::Constant(Constant::Int(4)),
+            Token::Semicolon,
+        ];
+        let mut parser = make_parser(tokens);
+        let stmt = parse_statement(&mut parser);
+
+        match stmt {
+            Statement::Return(Some(Expression::Division(lhs, rhs))) => match (*lhs, *rhs) {
+                (Expression::IntegerLiteral(20), Expression::IntegerLiteral(4)) => {}
+                _ => panic!("expected Division(20, 4)"),
+            },
+            _ => panic!("expected Return(Division(..))"),
+        }
+    }
+
+    #[test]
+    fn test_parse_statement_return_mixed_with_parentheses() {
+        let tokens = vec![
+            Token::Keyword(Keyword::Return),
+            Token::OpenParen,
+            Token::Constant(Constant::Int(2)),
+            Token::Plus,
+            Token::Constant(Constant::Int(3)),
+            Token::CloseParen,
+            Token::Asterisk,
+            Token::Constant(Constant::Int(4)),
+            Token::Plus,
+            Token::Constant(Constant::Int(5)),
+            Token::Semicolon,
+        ];
+        let mut parser = make_parser(tokens);
+        let stmt = parse_statement(&mut parser);
+
+        match stmt {
+            Statement::Return(Some(Expression::Addition(lhs, rhs))) => {
+                match *rhs {
+                    Expression::IntegerLiteral(5) => {}
+                    _ => panic!("expected right side to be 5"),
+                }
+
+                match *lhs {
+                    Expression::Multiplication(mult_lhs, mult_rhs) => {
+                        match (*mult_lhs, *mult_rhs) {
+                            (
+                                Expression::Addition(add_lhs, add_rhs),
+                                Expression::IntegerLiteral(4),
+                            ) => match (*add_lhs, *add_rhs) {
+                                (Expression::IntegerLiteral(2), Expression::IntegerLiteral(3)) => {}
+                                _ => panic!("expected (2 + 3) inside parentheses"),
+                            },
+                            _ => panic!("expected Multiplication((2 + 3), 4)"),
+                        }
+                    }
+                    _ => panic!("expected left side to be multiplication"),
+                }
+            }
+            _ => panic!("expected Return(Addition(Multiplication(..), 5))"),
+        }
+    }
+
+    #[test]
+    fn test_parse_unary_numeric_negation() {
+        let tokens = vec![
+            Token::Keyword(Keyword::Return),
+            Token::Minus,
+            Token::Constant(Constant::Int(42)),
+            Token::Semicolon,
+        ];
+        let mut parser = make_parser(tokens);
+        let stmt = parse_statement(&mut parser);
+
+        match stmt {
+            Statement::Return(Some(Expression::UnaryOperation(op, expr))) => {
+                assert!(matches!(op, Operator::NumericNegation));
+                match *expr {
+                    Expression::IntegerLiteral(42) => {}
+                    _ => panic!("expected IntegerLiteral(42) as operand"),
+                }
+            }
+            _ => panic!("expected Return(UnaryOperation(NumericNegation, ..))"),
+        }
+    }
+
+    #[test]
+    fn test_parse_unary_logical_negation() {
+        let tokens = vec![
+            Token::Keyword(Keyword::Return),
+            Token::LogicalNegation,
+            Token::Constant(Constant::Int(1)),
+            Token::Semicolon,
+        ];
+        let mut parser = make_parser(tokens);
+        let stmt = parse_statement(&mut parser);
+
+        match stmt {
+            Statement::Return(Some(Expression::UnaryOperation(op, expr))) => {
+                assert!(matches!(op, Operator::LogicalNegation));
+                match *expr {
+                    Expression::IntegerLiteral(1) => {}
+                    _ => panic!("expected IntegerLiteral(1) as operand"),
+                }
+            }
+            _ => panic!("expected Return(UnaryOperation(LogicalNegation, ..))"),
+        }
+    }
+
+    #[test]
+    fn test_parse_unary_bitwise_negation() {
+        let tokens = vec![
+            Token::Keyword(Keyword::Return),
+            Token::BitwiseNegation,
+            Token::Constant(Constant::Int(15)),
+            Token::Semicolon,
+        ];
+        let mut parser = make_parser(tokens);
+        let stmt = parse_statement(&mut parser);
+
+        match stmt {
+            Statement::Return(Some(Expression::UnaryOperation(op, expr))) => {
+                assert!(matches!(op, Operator::BitwiseNegation));
+                match *expr {
+                    Expression::IntegerLiteral(15) => {}
+                    _ => panic!("expected IntegerLiteral(15) as operand"),
+                }
+            }
+            _ => panic!("expected Return(UnaryOperation(BitwiseNegation, ..))"),
+        }
+    }
+
+    #[test]
+    fn test_parse_unary_sizeof() {
+        let tokens = vec![
+            Token::Keyword(Keyword::Return),
+            Token::Keyword(Keyword::Sizeof),
+            Token::Constant(Constant::Int(10)),
+            Token::Semicolon,
+        ];
+        let mut parser = make_parser(tokens);
+        let stmt = parse_statement(&mut parser);
+
+        match stmt {
+            Statement::Return(Some(Expression::UnaryOperation(op, expr))) => {
+                assert!(matches!(op, Operator::Sizeof));
+                match *expr {
+                    Expression::IntegerLiteral(10) => {}
+                    _ => panic!("expected IntegerLiteral(10) as operand"),
+                }
+            }
+            _ => panic!("expected Return(UnaryOperation(Sizeof, ..))"),
+        }
+    }
+
+    #[test]
+    fn test_parse_unary_prefix_increment() {
+        let tokens = vec![
+            Token::Keyword(Keyword::Return),
+            Token::PlusPlus,
+            Token::Identifier("x".to_string()),
+            Token::Semicolon,
+        ];
+        let mut parser = make_parser(tokens);
+        let stmt = parse_statement(&mut parser);
+
+        match stmt {
+            Statement::Return(Some(Expression::UnaryOperation(op, expr))) => {
+                assert!(matches!(op, Operator::PrefixIncrement));
+                match *expr {
+                    Expression::Identifier(ref name) => assert_eq!(name, "x"),
+                    _ => panic!("expected Identifier(x) as operand"),
+                }
+            }
+            _ => panic!("expected Return(UnaryOperation(PrefixIncrement, ..))"),
+        }
+    }
+
+    #[test]
+    fn test_parse_unary_prefix_decrement() {
+        let tokens = vec![
+            Token::Keyword(Keyword::Return),
+            Token::MinusMinus,
+            Token::Identifier("y".to_string()),
+            Token::Semicolon,
+        ];
+        let mut parser = make_parser(tokens);
+        let stmt = parse_statement(&mut parser);
+
+        match stmt {
+            Statement::Return(Some(Expression::UnaryOperation(op, expr))) => {
+                assert!(matches!(op, Operator::PrefixDecrement));
+                match *expr {
+                    Expression::Identifier(ref name) => assert_eq!(name, "y"),
+                    _ => panic!("expected Identifier(y) as operand"),
+                }
+            }
+            _ => panic!("expected Return(UnaryOperation(PrefixDecrement, ..))"),
+        }
+    }
+
+    #[test]
+    fn test_parse_unary_address_of() {
+        let tokens = vec![
+            Token::Keyword(Keyword::Return),
+            Token::BitwiseAnd,
+            Token::Identifier("p".to_string()),
+            Token::Semicolon,
+        ];
+        let mut parser = make_parser(tokens);
+        let stmt = parse_statement(&mut parser);
+
+        match stmt {
+            Statement::Return(Some(Expression::UnaryOperation(op, expr))) => {
+                assert!(matches!(op, Operator::AddressOf));
+                match *expr {
+                    Expression::Identifier(ref name) => assert_eq!(name, "p"),
+                    _ => panic!("expected Identifier(p) as operand"),
+                }
+            }
+            _ => panic!("expected Return(UnaryOperation(AddressOf, ..))"),
+        }
+    }
+
+    #[test]
+    fn test_parse_unary_dereference() {
+        let tokens = vec![
+            Token::Keyword(Keyword::Return),
+            Token::Asterisk,
+            Token::Identifier("p".to_string()),
+            Token::Semicolon,
+        ];
+        let mut parser = make_parser(tokens);
+        let stmt = parse_statement(&mut parser);
+
+        match stmt {
+            Statement::Return(Some(Expression::UnaryOperation(op, expr))) => {
+                assert!(matches!(op, Operator::Dereference));
+                match *expr {
+                    Expression::Identifier(ref name) => assert_eq!(name, "p"),
+                    _ => panic!("expected Identifier(p) as operand"),
+                }
+            }
+            _ => panic!("expected Return(UnaryOperation(Dereference, ..))"),
         }
     }
 }

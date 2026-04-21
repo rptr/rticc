@@ -42,5 +42,7 @@ make_tests!("",
     negative, "neg.c" => 133,
     logical_neg, "logical_negation.c" => 0,
     logical_neg_zero, "logical_negation_zero.c" => 1,
-    bitwise_negation, "bitwise_negation.c" => 245
+    bitwise_negation, "bitwise_negation.c" => 245,
+    add, "add.c" => 12,
+    subtract, "subtract.c" => 13,
 );
