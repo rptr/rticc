@@ -45,4 +45,6 @@ make_tests!("",
     bitwise_negation, "bitwise_negation.c" => 245,
     add, "add.c" => 12,
     subtract, "subtract.c" => 13,
+    multiply, "multiply.c" => 33,
+    divide, "divide.c" => 9,
 );

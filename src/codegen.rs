@@ -34,7 +34,6 @@ fn gen_expression(result: &mut String, expr: &Expression) {
             result.push_str(&format!("  mov x0, #{}\n", n));
         }
         Expression::UnaryOperation(op, expr) => {
-            // TODO Don't clone
             gen_expression(result, expr);
 
             match op {
@@ -53,6 +52,29 @@ fn gen_expression(result: &mut String, expr: &Expression) {
                 Operator::PrefixDecrement => todo!(),
                 Operator::AddressOf => todo!(),
                 Operator::Dereference => todo!(),
+                _ => unreachable!(),
+            }
+        }
+        Expression::BinaryOperation(op, left, right) => {
+            gen_expression(result, left);
+            result.push_str("  str x0, [sp, #-0x10]!\n");
+            gen_expression(result, right);
+            result.push_str("  ldr x1, [sp], #0x10\n");
+
+            match op {
+                Operator::Addition => {
+                    result.push_str("  add x0, x1, x0\n");
+                }
+                Operator::Subtraction => {
+                    result.push_str("  sub x0, x1, x0\n");
+                }
+                Operator::Multiplication => {
+                    result.push_str("  mul x0, x1, x0\n");
+                }
+                Operator::Division => {
+                    result.push_str("  sdiv x0, x1, x0\n");
+                }
+                _ => unreachable!(),
             }
         }
         _ => todo!(),

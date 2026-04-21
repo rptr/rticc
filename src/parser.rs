@@ -18,10 +18,7 @@ pub(crate) enum Expression {
     IntegerLiteral(u64),
     Identifier(String),
     UnaryOperation(Operator, Box<Expression>),
-    Addition(Box<Expression>, Box<Expression>),
-    Subtraction(Box<Expression>, Box<Expression>),
-    Multiplication(Box<Expression>, Box<Expression>),
-    Division(Box<Expression>, Box<Expression>),
+    BinaryOperation(Operator, Box<Expression>, Box<Expression>),
 }
 
 pub(crate) enum Operator {
@@ -33,6 +30,10 @@ pub(crate) enum Operator {
     PrefixDecrement,
     AddressOf,
     Dereference,
+    Addition,
+    Subtraction,
+    Multiplication,
+    Division,
 }
 
 struct Parser {
@@ -130,9 +131,9 @@ fn parse_expression(parser: &mut Parser) -> Expression {
         let next_term = parse_term(parser);
 
         term = if is_addition {
-            Expression::Addition(Box::new(term), Box::new(next_term))
+            Expression::BinaryOperation(Operator::Addition, Box::new(term), Box::new(next_term))
         } else {
-            Expression::Subtraction(Box::new(term), Box::new(next_term))
+            Expression::BinaryOperation(Operator::Subtraction, Box::new(term), Box::new(next_term))
         };
     }
 
@@ -147,12 +148,12 @@ fn parse_term(parser: &mut Parser) -> Expression {
         Some(Token::Asterisk) => {
             parser.next();
             let rhs = parse_term(parser);
-            Expression::Multiplication(Box::new(factor), Box::new(rhs))
+            Expression::BinaryOperation(Operator::Multiplication, Box::new(factor), Box::new(rhs))
         }
         Some(Token::Division) => {
             parser.next();
             let rhs = parse_term(parser);
-            Expression::Division(Box::new(factor), Box::new(rhs))
+            Expression::BinaryOperation(Operator::Division, Box::new(factor), Box::new(rhs))
         }
         _ => factor,
     }
@@ -292,10 +293,12 @@ mod tests {
         let stmt = parse_statement(&mut parser);
 
         match stmt {
-            Statement::Return(Some(Expression::Addition(lhs, rhs))) => match (*lhs, *rhs) {
-                (Expression::IntegerLiteral(9), Expression::IntegerLiteral(11)) => {}
-                _ => panic!("expected Addition(9, 11)"),
-            },
+            Statement::Return(Some(Expression::BinaryOperation(Operator::Addition, lhs, rhs))) => {
+                match (*lhs, *rhs) {
+                    (Expression::IntegerLiteral(9), Expression::IntegerLiteral(11)) => {}
+                    _ => panic!("expected Addition(9, 11)"),
+                }
+            }
             _ => panic!("expected Return(Addition(..))"),
         }
     }
@@ -313,7 +316,11 @@ mod tests {
         let stmt = parse_statement(&mut parser);
 
         match stmt {
-            Statement::Return(Some(Expression::Subtraction(lhs, rhs))) => match (*lhs, *rhs) {
+            Statement::Return(Some(Expression::BinaryOperation(
+                Operator::Subtraction,
+                lhs,
+                rhs,
+            ))) => match (*lhs, *rhs) {
                 (Expression::IntegerLiteral(10), Expression::IntegerLiteral(3)) => {}
                 _ => panic!("expected Subtraction(10, 3)"),
             },
@@ -334,7 +341,11 @@ mod tests {
         let stmt = parse_statement(&mut parser);
 
         match stmt {
-            Statement::Return(Some(Expression::Multiplication(lhs, rhs))) => match (*lhs, *rhs) {
+            Statement::Return(Some(Expression::BinaryOperation(
+                Operator::Multiplication,
+                lhs,
+                rhs,
+            ))) => match (*lhs, *rhs) {
                 (Expression::IntegerLiteral(4), Expression::IntegerLiteral(5)) => {}
                 _ => panic!("expected Multiplication(4, 5)"),
             },
@@ -355,10 +366,12 @@ mod tests {
         let stmt = parse_statement(&mut parser);
 
         match stmt {
-            Statement::Return(Some(Expression::Division(lhs, rhs))) => match (*lhs, *rhs) {
-                (Expression::IntegerLiteral(20), Expression::IntegerLiteral(4)) => {}
-                _ => panic!("expected Division(20, 4)"),
-            },
+            Statement::Return(Some(Expression::BinaryOperation(Operator::Division, lhs, rhs))) => {
+                match (*lhs, *rhs) {
+                    (Expression::IntegerLiteral(20), Expression::IntegerLiteral(4)) => {}
+                    _ => panic!("expected Division(20, 4)"),
+                }
+            }
             _ => panic!("expected Return(Division(..))"),
         }
     }
@@ -382,17 +395,17 @@ mod tests {
         let stmt = parse_statement(&mut parser);
 
         match stmt {
-            Statement::Return(Some(Expression::Addition(lhs, rhs))) => {
+            Statement::Return(Some(Expression::BinaryOperation(Operator::Addition, lhs, rhs))) => {
                 match *rhs {
                     Expression::IntegerLiteral(5) => {}
                     _ => panic!("expected right side to be 5"),
                 }
 
                 match *lhs {
-                    Expression::Multiplication(mult_lhs, mult_rhs) => {
+                    Expression::BinaryOperation(Operator::Multiplication, mult_lhs, mult_rhs) => {
                         match (*mult_lhs, *mult_rhs) {
                             (
-                                Expression::Addition(add_lhs, add_rhs),
+                                Expression::BinaryOperation(Operator::Addition, add_lhs, add_rhs),
                                 Expression::IntegerLiteral(4),
                             ) => match (*add_lhs, *add_rhs) {
                                 (Expression::IntegerLiteral(2), Expression::IntegerLiteral(3)) => {}
