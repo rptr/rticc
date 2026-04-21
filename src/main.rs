@@ -12,15 +12,16 @@ fn main() {
         let ast = parser::parse(tokens);
         let asm = codegen::generate(ast);
 
-        std::fs::write("temp.s", asm).unwrap();
+        let asm_name = format!("{}.s", filename.strip_suffix(".c").unwrap_or("temp"));
+        std::fs::write(&asm_name, asm).unwrap();
 
         let out_name = filename.strip_suffix(".c").unwrap_or("out");
 
         let _ = Command::new("gcc")
-            .args(["temp.s", "-o", out_name])
+            .args([&asm_name, "-o", out_name])
             .output()
             .expect("could not execute gcc");
 
-        // std::fs::remove_file("temp.s").unwrap();
+        std::fs::remove_file(asm_name).unwrap();
     }
 }
