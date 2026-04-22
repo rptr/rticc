@@ -34,6 +34,14 @@ pub(crate) enum Operator {
     Subtraction,
     Multiplication,
     Division,
+    LogicalAnd,
+    LogicalOr,
+    Equal,
+    NotEqual,
+    LessThan,
+    GreaterThan,
+    LessThanOrEqual,
+    GreaterThanOrEqual,
 }
 
 struct Parser {
@@ -121,6 +129,113 @@ fn parse_statement(parser: &mut Parser) -> Statement {
 }
 
 fn parse_expression(parser: &mut Parser) -> Expression {
+    let mut logical_and = parse_logical_and(parser);
+
+    while parser.peek() == Some(&Token::LogicalOr) {
+        parser.next();
+        let next_logical_and = parse_logical_and(parser);
+        logical_and = Expression::BinaryOperation(
+            Operator::LogicalOr,
+            Box::new(logical_and),
+            Box::new(next_logical_and),
+        );
+    }
+
+    logical_and
+}
+
+fn parse_logical_and(parser: &mut Parser) -> Expression {
+    let mut equality = parse_equality(parser);
+
+    while parser.peek() == Some(&Token::LogicalAnd) {
+        parser.next();
+        let next_equality = parse_equality(parser);
+        equality = Expression::BinaryOperation(
+            Operator::LogicalAnd,
+            Box::new(equality),
+            Box::new(next_equality),
+        );
+    }
+
+    equality
+}
+
+fn parse_equality(parser: &mut Parser) -> Expression {
+    let mut addition = parse_relational(parser);
+
+    while matches!(parser.peek(), Some(Token::Equal) | Some(Token::NotEqual)) {
+        let is_equal = matches!(parser.peek(), Some(Token::Equal));
+
+        parser.next();
+
+        let next_addition = parse_relational(parser);
+
+        addition = if is_equal {
+            Expression::BinaryOperation(
+                Operator::Equal,
+                Box::new(addition),
+                Box::new(next_addition),
+            )
+        } else {
+            Expression::BinaryOperation(
+                Operator::NotEqual,
+                Box::new(addition),
+                Box::new(next_addition),
+            )
+        };
+    }
+
+    addition
+}
+
+fn parse_relational(parser: &mut Parser) -> Expression {
+    let mut addition = parse_addition(parser);
+
+    while matches!(
+        parser.peek(),
+        Some(Token::LessThan)
+            | Some(Token::GreaterThan)
+            | Some(Token::LessThanOrEqual)
+            | Some(Token::GreaterThanOrEqual)
+    ) {
+        let is_less_than = matches!(parser.peek(), Some(Token::LessThan));
+        let is_less_than_or_equal = matches!(parser.peek(), Some(Token::LessThanOrEqual));
+        let is_greater_than = matches!(parser.peek(), Some(Token::GreaterThan));
+        let is_greater_than_or_equal = matches!(parser.peek(), Some(Token::GreaterThanOrEqual));
+
+        parser.next();
+
+        let next_addition = parse_addition(parser);
+
+        addition = match (true) {
+            _ if is_less_than => Expression::BinaryOperation(
+                Operator::LessThan,
+                Box::new(addition),
+                Box::new(next_addition),
+            ),
+            _ if is_less_than_or_equal => Expression::BinaryOperation(
+                Operator::LessThanOrEqual,
+                Box::new(addition),
+                Box::new(next_addition),
+            ),
+            _ if is_greater_than => Expression::BinaryOperation(
+                Operator::GreaterThan,
+                Box::new(addition),
+                Box::new(next_addition),
+            ),
+            _ if is_greater_than_or_equal => Expression::BinaryOperation(
+                Operator::GreaterThanOrEqual,
+                Box::new(addition),
+                Box::new(next_addition),
+            ),
+            _ => unreachable!(),
+        };
+    }
+
+    addition
+}
+
+fn parse_addition(parser: &mut Parser) -> Expression {
     let mut term = parse_term(parser);
 
     while matches!(parser.peek(), Some(Token::Plus) | Some(Token::Minus)) {
@@ -602,6 +717,198 @@ mod tests {
                 }
             }
             _ => panic!("expected Return(UnaryOperation(Dereference, ..))"),
+        }
+    }
+
+    #[test]
+    fn test_parse_binary_logical_and() {
+        let tokens = vec![
+            Token::Keyword(Keyword::Return),
+            Token::Constant(Constant::Int(1)),
+            Token::LogicalAnd,
+            Token::Constant(Constant::Int(0)),
+            Token::Semicolon,
+        ];
+        let mut parser = make_parser(tokens);
+        let stmt = parse_statement(&mut parser);
+
+        match stmt {
+            Statement::Return(Some(Expression::BinaryOperation(op, lhs, rhs))) => {
+                assert!(matches!(op, Operator::LogicalAnd));
+                match (*lhs, *rhs) {
+                    (Expression::IntegerLiteral(1), Expression::IntegerLiteral(0)) => {}
+                    _ => panic!("expected BinaryOperation(LogicalAnd, 1, 0)"),
+                }
+            }
+            _ => panic!("expected Return(BinaryOperation(LogicalAnd, ..))"),
+        }
+    }
+
+    #[test]
+    fn test_parse_binary_logical_or() {
+        let tokens = vec![
+            Token::Keyword(Keyword::Return),
+            Token::Constant(Constant::Int(1)),
+            Token::LogicalOr,
+            Token::Constant(Constant::Int(0)),
+            Token::Semicolon,
+        ];
+        let mut parser = make_parser(tokens);
+        let stmt = parse_statement(&mut parser);
+
+        match stmt {
+            Statement::Return(Some(Expression::BinaryOperation(op, lhs, rhs))) => {
+                assert!(matches!(op, Operator::LogicalOr));
+                match (*lhs, *rhs) {
+                    (Expression::IntegerLiteral(1), Expression::IntegerLiteral(0)) => {}
+                    _ => panic!("expected BinaryOperation(LogicalOr, 1, 0)"),
+                }
+            }
+            _ => panic!("expected Return(BinaryOperation(LogicalOr, ..))"),
+        }
+    }
+
+    #[test]
+    fn test_parse_binary_equal() {
+        let tokens = vec![
+            Token::Keyword(Keyword::Return),
+            Token::Constant(Constant::Int(5)),
+            Token::Equal,
+            Token::Constant(Constant::Int(5)),
+            Token::Semicolon,
+        ];
+        let mut parser = make_parser(tokens);
+        let stmt = parse_statement(&mut parser);
+
+        match stmt {
+            Statement::Return(Some(Expression::BinaryOperation(op, lhs, rhs))) => {
+                assert!(matches!(op, Operator::Equal));
+                match (*lhs, *rhs) {
+                    (Expression::IntegerLiteral(5), Expression::IntegerLiteral(5)) => {}
+                    _ => panic!("expected BinaryOperation(Equal, 5, 5)"),
+                }
+            }
+            _ => panic!("expected Return(BinaryOperation(Equal, ..))"),
+        }
+    }
+
+    #[test]
+    fn test_parse_binary_not_equal() {
+        let tokens = vec![
+            Token::Keyword(Keyword::Return),
+            Token::Constant(Constant::Int(3)),
+            Token::NotEqual,
+            Token::Constant(Constant::Int(7)),
+            Token::Semicolon,
+        ];
+        let mut parser = make_parser(tokens);
+        let stmt = parse_statement(&mut parser);
+
+        match stmt {
+            Statement::Return(Some(Expression::BinaryOperation(op, lhs, rhs))) => {
+                assert!(matches!(op, Operator::NotEqual));
+                match (*lhs, *rhs) {
+                    (Expression::IntegerLiteral(3), Expression::IntegerLiteral(7)) => {}
+                    _ => panic!("expected BinaryOperation(NotEqual, 3, 7)"),
+                }
+            }
+            _ => panic!("expected Return(BinaryOperation(NotEqual, ..))"),
+        }
+    }
+
+    #[test]
+    fn test_parse_binary_less_than() {
+        let tokens = vec![
+            Token::Keyword(Keyword::Return),
+            Token::Constant(Constant::Int(2)),
+            Token::LessThan,
+            Token::Constant(Constant::Int(8)),
+            Token::Semicolon,
+        ];
+        let mut parser = make_parser(tokens);
+        let stmt = parse_statement(&mut parser);
+
+        match stmt {
+            Statement::Return(Some(Expression::BinaryOperation(op, lhs, rhs))) => {
+                assert!(matches!(op, Operator::LessThan));
+                match (*lhs, *rhs) {
+                    (Expression::IntegerLiteral(2), Expression::IntegerLiteral(8)) => {}
+                    _ => panic!("expected BinaryOperation(LessThan, 2, 8)"),
+                }
+            }
+            _ => panic!("expected Return(BinaryOperation(LessThan, ..))"),
+        }
+    }
+
+    #[test]
+    fn test_parse_binary_greater_than() {
+        let tokens = vec![
+            Token::Keyword(Keyword::Return),
+            Token::Constant(Constant::Int(10)),
+            Token::GreaterThan,
+            Token::Constant(Constant::Int(4)),
+            Token::Semicolon,
+        ];
+        let mut parser = make_parser(tokens);
+        let stmt = parse_statement(&mut parser);
+
+        match stmt {
+            Statement::Return(Some(Expression::BinaryOperation(op, lhs, rhs))) => {
+                assert!(matches!(op, Operator::GreaterThan));
+                match (*lhs, *rhs) {
+                    (Expression::IntegerLiteral(10), Expression::IntegerLiteral(4)) => {}
+                    _ => panic!("expected BinaryOperation(GreaterThan, 10, 4)"),
+                }
+            }
+            _ => panic!("expected Return(BinaryOperation(GreaterThan, ..))"),
+        }
+    }
+
+    #[test]
+    fn test_parse_binary_less_than_or_equal() {
+        let tokens = vec![
+            Token::Keyword(Keyword::Return),
+            Token::Constant(Constant::Int(6)),
+            Token::LessThanOrEqual,
+            Token::Constant(Constant::Int(6)),
+            Token::Semicolon,
+        ];
+        let mut parser = make_parser(tokens);
+        let stmt = parse_statement(&mut parser);
+
+        match stmt {
+            Statement::Return(Some(Expression::BinaryOperation(op, lhs, rhs))) => {
+                assert!(matches!(op, Operator::LessThanOrEqual));
+                match (*lhs, *rhs) {
+                    (Expression::IntegerLiteral(6), Expression::IntegerLiteral(6)) => {}
+                    _ => panic!("expected BinaryOperation(LessThanOrEqual, 6, 6)"),
+                }
+            }
+            _ => panic!("expected Return(BinaryOperation(LessThanOrEqual, ..))"),
+        }
+    }
+
+    #[test]
+    fn test_parse_binary_greater_than_or_equal() {
+        let tokens = vec![
+            Token::Keyword(Keyword::Return),
+            Token::Constant(Constant::Int(9)),
+            Token::GreaterThanOrEqual,
+            Token::Constant(Constant::Int(9)),
+            Token::Semicolon,
+        ];
+        let mut parser = make_parser(tokens);
+        let stmt = parse_statement(&mut parser);
+
+        match stmt {
+            Statement::Return(Some(Expression::BinaryOperation(op, lhs, rhs))) => {
+                assert!(matches!(op, Operator::GreaterThanOrEqual));
+                match (*lhs, *rhs) {
+                    (Expression::IntegerLiteral(9), Expression::IntegerLiteral(9)) => {}
+                    _ => panic!("expected BinaryOperation(GreaterThanOrEqual, 9, 9)"),
+                }
+            }
+            _ => panic!("expected Return(BinaryOperation(GreaterThanOrEqual, ..))"),
         }
     }
 }
