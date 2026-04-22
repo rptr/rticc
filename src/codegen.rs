@@ -74,6 +74,30 @@ fn gen_expression(result: &mut String, expr: &Expression) {
                 Operator::Division => {
                     result.push_str("  sdiv x0, x1, x0\n");
                 }
+                Operator::Equal => {
+                    result.push_str("  cmp x1, x0\n");
+                    result.push_str("  cset x0, eq\n");
+                }
+                Operator::NotEqual => {
+                    result.push_str("  cmp x1, x0\n");
+                    result.push_str("  cset x0, ne\n");
+                }
+                Operator::LessThan => {
+                    result.push_str("  cmp x1, x0\n");
+                    result.push_str("  cset x0, lt\n");
+                }
+                Operator::LessThanOrEqual => {
+                    result.push_str("  cmp x1, x0\n");
+                    result.push_str("  cset x0, le\n");
+                }
+                Operator::GreaterThan => {
+                    result.push_str("  cmp x1, x0\n");
+                    result.push_str("  cset x0, gt\n");
+                }
+                Operator::GreaterThanOrEqual => {
+                    result.push_str("  cmp x1, x0\n");
+                    result.push_str("  cset x0, ge\n");
+                }
                 _ => unreachable!(),
             }
         }
