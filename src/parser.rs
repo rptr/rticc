@@ -90,8 +90,6 @@ fn parse_function_definition(parser: &mut Parser) -> FunctionDefinition {
 
     parser.expect(&Token::OpenParen);
 
-    println!("{:?}", parser.peek());
-
     // optional, ignore
     if parser.peek() == Some(&Token::Keyword(Keyword::Void)) {
         parser.next();
@@ -207,7 +205,7 @@ fn parse_relational(parser: &mut Parser) -> Expression {
 
         let next_addition = parse_addition(parser);
 
-        addition = match (true) {
+        addition = match true {
             _ if is_less_than => Expression::BinaryOperation(
                 Operator::LessThan,
                 Box::new(addition),

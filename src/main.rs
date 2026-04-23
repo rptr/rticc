@@ -17,10 +17,19 @@ fn main() {
 
         let out_name = filename.strip_suffix(".c").unwrap_or("out");
 
-        let _ = Command::new("gcc")
+        match Command::new("gcc")
             .args([&asm_name, "-o", out_name])
             .output()
-            .expect("could not execute gcc");
+        {
+            Ok(output) => {
+                if !output.status.success() {
+                    eprintln!("gcc failed:");
+                    eprintln!("{}", String::from_utf8_lossy(&output.stderr));
+                    eprintln!("{}", String::from_utf8_lossy(&output.stdout));
+                }
+            }
+            Err(e) => eprintln!("could not execute gcc: {}", e),
+        }
 
         std::fs::remove_file(asm_name).unwrap();
     }

@@ -53,4 +53,6 @@ make_tests!("",
     less_than_or_equal, "less_than_or_equal.c" => 0,
     greater_than, "greater_than.c" => 0,
     greater_than_or_equal, "greater_than_or_equal.c" => 1,
+    logical_and, "logical_and.c" => 0,
+    logical_or, "logical_or.c" => 1,
 );
