@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use crate::parser::{Expression, Operator, Program, Statement};
 
 struct Codegen {
@@ -17,32 +19,58 @@ pub(crate) fn generate(program: Program) -> String {
 }
 
 fn gen_function_definition(codegen: &mut Codegen, func: &crate::parser::FunctionDefinition) {
+    let mut variable_map: HashMap<String, i32> = HashMap::new();
+    let mut stack_offset = -16;
+
     codegen.result.push_str(&format!(".globl _{}\n", func.name));
     codegen.result.push_str(&format!("_{}:\n", func.name));
+    codegen.result.push_str("  stp fp, lr, [sp, #-0x10]!\n");
+    codegen.result.push_str("  mov fp, sp\n");
 
     for stmt in &func.body {
-        gen_statement(codegen, stmt);
+        gen_statement(codegen, stmt, &mut variable_map, &mut stack_offset);
     }
 }
 
-fn gen_statement(codegen: &mut Codegen, stmt: &crate::parser::Statement) {
+fn gen_statement(
+    codegen: &mut Codegen,
+    stmt: &crate::parser::Statement,
+    variable_map: &mut HashMap<String, i32>,
+    stack_offset: &mut i32,
+) {
     match stmt {
         Statement::Return(expr) => {
-            gen_expression(codegen, expr.as_ref().unwrap());
+            gen_expression(codegen, expr.as_ref().unwrap(), variable_map);
 
+            codegen.result.push_str("  mov sp, fp\n");
+            codegen.result.push_str("  ldp fp, lr, [sp], #0x10\n");
             codegen.result.push_str("  ret\n");
         }
-        _ => todo!(),
+        Statement::Expression(expression) => {
+            gen_expression(codegen, expression, variable_map);
+        }
+        Statement::Declaration(name, expression) => {
+            gen_expression(codegen, expression.as_ref().unwrap(), variable_map);
+            codegen
+                .result
+                .push_str(&format!("  str x0, [sp, #-0x10]!\n"));
+            variable_map.insert(name.clone(), *stack_offset);
+            *stack_offset -= 16;
+        }
     }
 }
 
-fn gen_expression(codegen: &mut Codegen, expr: &Expression) {
+fn gen_expression(
+    codegen: &mut Codegen,
+    expr: &Expression,
+    variable_map: &mut HashMap<String, i32>,
+) {
     match expr {
         Expression::IntegerLiteral(n) => {
             codegen.result.push_str(&format!("  mov x0, #{}\n", n));
         }
         Expression::UnaryOperation(op, expr) => {
-            gen_expression(codegen, expr);
+            gen_expression(codegen, expr, variable_map);
 
             match op {
                 Operator::NumericNegation => {
@@ -65,13 +93,13 @@ fn gen_expression(codegen: &mut Codegen, expr: &Expression) {
         }
         Expression::BinaryOperation(op, left, right) => {
             if matches!(op, Operator::LogicalAnd | Operator::LogicalOr) {
-                gen_logical_expression(codegen, op, left, right);
+                gen_logical_expression(codegen, op, left, right, variable_map);
                 return;
             }
 
-            gen_expression(codegen, left);
+            gen_expression(codegen, left, variable_map);
             codegen.result.push_str("  str x0, [sp, #-0x10]!\n");
-            gen_expression(codegen, right);
+            gen_expression(codegen, right, variable_map);
             codegen.result.push_str("  ldr x1, [sp], #0x10\n");
 
             match op {
@@ -114,7 +142,30 @@ fn gen_expression(codegen: &mut Codegen, expr: &Expression) {
                 _ => unreachable!(),
             }
         }
-        _ => todo!(),
+        Expression::Assignment(name, expr) => {
+            if variable_map.get(name).is_none() {
+                panic!("variable {} not declared", name);
+            }
+
+            gen_expression(codegen, expr, variable_map);
+
+            let offset = variable_map.get(name).unwrap();
+
+            codegen
+                .result
+                .push_str(&format!("  str x0, [fp, #{}]\n", offset));
+        }
+        Expression::Identifier(name) => {
+            if variable_map.get(name).is_none() {
+                panic!("variable {} not declared", name);
+            }
+
+            let offset = variable_map.get(name).unwrap();
+
+            codegen
+                .result
+                .push_str(&format!("  ldr x0, [fp, #{}]\n", offset));
+        }
     }
 }
 
@@ -123,33 +174,34 @@ fn gen_logical_expression(
     op: &Operator,
     left: &Expression,
     right: &Expression,
+    variable_map: &mut HashMap<String, i32>,
 ) {
     let label_1 = random_label(codegen);
     let label_2 = random_label(codegen);
 
     match op {
         Operator::LogicalOr => {
-            gen_expression(codegen, left);
+            gen_expression(codegen, left, variable_map);
             codegen.result.push_str("  cmp x0, #0\n");
             codegen.result.push_str(&format!("  beq {label_1}\n"));
             codegen.result.push_str("  mov x0, #1\n");
             codegen.result.push_str(&format!("  b {label_2}\n"));
             codegen.result.push_str(&format!("{label_1}:\n"));
 
-            gen_expression(codegen, right);
+            gen_expression(codegen, right, variable_map);
             codegen.result.push_str("  cmp x0, #0\n");
             codegen.result.push_str("  mov x0, #0\n");
             codegen.result.push_str("  cset x0, ne\n");
             codegen.result.push_str(&format!("{label_2}:\n"));
         }
         Operator::LogicalAnd => {
-            gen_expression(codegen, left);
+            gen_expression(codegen, left, variable_map);
             codegen.result.push_str("  cmp x0, #0\n");
             codegen.result.push_str(&format!("  bne {label_1}\n"));
             codegen.result.push_str(&format!("  b {label_2}\n"));
             codegen.result.push_str(&format!("{label_1}:\n"));
 
-            gen_expression(codegen, right);
+            gen_expression(codegen, right, variable_map);
             codegen.result.push_str("  cmp x0, #0\n");
             codegen.result.push_str("  mov x0, #0\n");
             codegen.result.push_str("  cset x0, ne\n");

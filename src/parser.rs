@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use crate::lexer::{Constant, Keyword, Token};
 
 pub(crate) struct Program {
@@ -12,6 +14,7 @@ pub(crate) struct FunctionDefinition {
 pub(crate) enum Statement {
     Expression(Expression),
     Return(Option<Expression>),
+    Declaration(String, Option<Expression>),
 }
 
 pub(crate) enum Expression {
@@ -19,6 +22,7 @@ pub(crate) enum Expression {
     Identifier(String),
     UnaryOperation(Operator, Box<Expression>),
     BinaryOperation(Operator, Box<Expression>, Box<Expression>),
+    Assignment(String, Box<Expression>),
 }
 
 pub(crate) enum Operator {
@@ -98,17 +102,38 @@ fn parse_function_definition(parser: &mut Parser) -> FunctionDefinition {
     parser.expect(&Token::CloseParen);
     parser.expect(&Token::OpenCurly);
 
-    let stmt = parse_statement(parser);
+    let mut stmts = vec![];
+
+    loop {
+        let stmt = parse_statement(parser);
+
+        stmts.push(stmt);
+
+        if parser.peek() == Some(&Token::CloseCurly) {
+            break;
+        }
+    }
 
     parser.expect(&Token::CloseCurly);
 
-    FunctionDefinition {
-        name,
-        body: vec![stmt],
-    }
+    FunctionDefinition { name, body: stmts }
 }
 
 fn parse_statement(parser: &mut Parser) -> Statement {
+    let next = parser.peek();
+
+    if next == Some(&Token::Keyword(Keyword::Return)) {
+        return parse_return_statement(parser);
+    } else if matches!(next, Some(Token::Keyword(Keyword::Int))) {
+        return parse_declaration_statement(parser);
+    } else {
+        let stmt = Statement::Expression(parse_expression(parser));
+        parser.expect(&Token::Semicolon);
+        return stmt;
+    }
+}
+
+fn parse_return_statement(parser: &mut Parser) -> Statement {
     parser.expect(&Token::Keyword(Keyword::Return));
 
     let t = parser.peek();
@@ -126,7 +151,52 @@ fn parse_statement(parser: &mut Parser) -> Statement {
     }
 }
 
+fn parse_declaration_statement(parser: &mut Parser) -> Statement {
+    parser.expect(&Token::Keyword(Keyword::Int));
+
+    let name = if let Some(Token::Identifier(name)) = parser.peek() {
+        name.clone()
+    } else {
+        panic!("expected variable name identifier");
+    };
+
+    parser.next();
+
+    let expression = if parser.peek() == Some(&Token::Assignment) {
+        parser.next();
+        Some(parse_expression(parser))
+    } else {
+        None
+    };
+
+    parser.expect(&Token::Semicolon);
+
+    Statement::Declaration(name, expression)
+}
+
 fn parse_expression(parser: &mut Parser) -> Expression {
+    parse_assignment(parser)
+}
+
+fn parse_assignment(parser: &mut Parser) -> Expression {
+    let left = parse_logical_or(parser);
+
+    if parser.peek() == Some(&Token::Assignment) {
+        parser.next();
+        let value = parse_expression(parser);
+
+        let name = match left {
+            Expression::Identifier(name) => name,
+            _ => panic!("left-hand side of assignment must be an identifier"),
+        };
+
+        Expression::Assignment(name, Box::new(value))
+    } else {
+        left
+    }
+}
+
+fn parse_logical_or(parser: &mut Parser) -> Expression {
     let mut logical_and = parse_logical_and(parser);
 
     while parser.peek() == Some(&Token::LogicalOr) {

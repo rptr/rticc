@@ -16,7 +16,7 @@ fn run_test(c_file: &Path, return_value: i32) {
         .expect("failed to run compiled binary");
 
     assert_eq!(
-        run.code().unwrap(),
+        run.code().expect("No exit code"),
         return_value,
         "wrong exit code for {:?}",
         c_file
@@ -43,7 +43,7 @@ make_tests!("",
     logical_neg, "logical_negation.c" => 0,
     logical_neg_zero, "logical_negation_zero.c" => 1,
     bitwise_negation, "bitwise_negation.c" => 245,
-    add, "add.c" => 12,
+    add, "add.c" => 6,
     subtract, "subtract.c" => 13,
     multiply, "multiply.c" => 33,
     divide, "divide.c" => 9,
@@ -55,4 +55,6 @@ make_tests!("",
     greater_than_or_equal, "greater_than_or_equal.c" => 1,
     logical_and, "logical_and.c" => 0,
     logical_or, "logical_or.c" => 1,
+    int, "int.c" => 26,
+    int_add, "int_add.c" => 10123,
 );

@@ -31,6 +31,6 @@ fn main() {
             Err(e) => eprintln!("could not execute gcc: {}", e),
         }
 
-        std::fs::remove_file(asm_name).unwrap();
+        // std::fs::remove_file(asm_name).unwrap();
     }
 }
