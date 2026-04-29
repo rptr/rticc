@@ -57,4 +57,6 @@ make_tests!("",
     logical_or, "logical_or.c" => 1,
     int, "int.c" => 26,
     int_add, "int_add.c" => 10123,
+    if_, "if.c" => 100,
+    if_else, "if_else.c" => 200,
 );

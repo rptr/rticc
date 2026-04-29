@@ -8,13 +8,18 @@ pub(crate) struct Program {
 
 pub(crate) struct FunctionDefinition {
     pub(crate) name: String,
-    pub(crate) body: Vec<Statement>,
+    pub(crate) body: Vec<BlockItem>,
+}
+
+pub(crate) enum BlockItem {
+    Statement(Statement),
+    Declaration(String, Option<Expression>),
 }
 
 pub(crate) enum Statement {
     Expression(Expression),
     Return(Option<Expression>),
-    Declaration(String, Option<Expression>),
+    If(Expression, Vec<BlockItem>, Vec<BlockItem>),
 }
 
 pub(crate) enum Expression {
@@ -100,14 +105,21 @@ fn parse_function_definition(parser: &mut Parser) -> FunctionDefinition {
     }
 
     parser.expect(&Token::CloseParen);
+
+    let stmts = parse_block(parser);
+
+    FunctionDefinition { name, body: stmts }
+}
+
+fn parse_block(parser: &mut Parser) -> Vec<BlockItem> {
     parser.expect(&Token::OpenCurly);
 
     let mut stmts = vec![];
 
     loop {
-        let stmt = parse_statement(parser);
+        let blockitem = parse_block_item(parser);
 
-        stmts.push(stmt);
+        stmts.push(blockitem);
 
         if parser.peek() == Some(&Token::CloseCurly) {
             break;
@@ -116,42 +128,54 @@ fn parse_function_definition(parser: &mut Parser) -> FunctionDefinition {
 
     parser.expect(&Token::CloseCurly);
 
-    FunctionDefinition { name, body: stmts }
+    stmts
 }
 
-fn parse_statement(parser: &mut Parser) -> Statement {
+fn parse_block_item(parser: &mut Parser) -> BlockItem {
+    let next = parser.peek();
+
+    if next == Some(&Token::Keyword(Keyword::Int)) {
+        parse_declaration(parser)
+    } else {
+        parse_statement(parser)
+    }
+}
+
+fn parse_statement(parser: &mut Parser) -> BlockItem {
     let next = parser.peek();
 
     if next == Some(&Token::Keyword(Keyword::Return)) {
-        return parse_return_statement(parser);
-    } else if matches!(next, Some(Token::Keyword(Keyword::Int))) {
-        return parse_declaration_statement(parser);
+        BlockItem::Statement(parse_return_statement(parser))
+    } else if next == Some(&Token::Keyword(Keyword::If)) {
+        parse_if(parser)
     } else {
         let stmt = Statement::Expression(parse_expression(parser));
         parser.expect(&Token::Semicolon);
-        return stmt;
+        BlockItem::Statement(stmt)
     }
 }
 
-fn parse_return_statement(parser: &mut Parser) -> Statement {
-    parser.expect(&Token::Keyword(Keyword::Return));
+fn parse_if(parser: &mut Parser) -> BlockItem {
+    parser.expect(&Token::Keyword(Keyword::If));
+    parser.expect(&Token::OpenParen);
 
-    let t = parser.peek();
+    let condition = parse_expression(parser);
 
-    if t == Some(&Token::Semicolon) {
-        // return without expression
+    parser.expect(&Token::CloseParen);
+
+    let then_branch = parse_block(parser);
+
+    let else_branch = if parser.peek() == Some(&Token::Keyword(Keyword::Else)) {
         parser.next();
-        Statement::Return(None)
+        parse_block(parser)
     } else {
-        let expr = parse_expression(parser);
+        vec![]
+    };
 
-        parser.expect(&Token::Semicolon);
-
-        return Statement::Return(Some(expr));
-    }
+    BlockItem::Statement(Statement::If(condition, then_branch, else_branch))
 }
 
-fn parse_declaration_statement(parser: &mut Parser) -> Statement {
+fn parse_declaration(parser: &mut Parser) -> BlockItem {
     parser.expect(&Token::Keyword(Keyword::Int));
 
     let name = if let Some(Token::Identifier(name)) = parser.peek() {
@@ -171,7 +195,25 @@ fn parse_declaration_statement(parser: &mut Parser) -> Statement {
 
     parser.expect(&Token::Semicolon);
 
-    Statement::Declaration(name, expression)
+    BlockItem::Declaration(name, expression)
+}
+
+fn parse_return_statement(parser: &mut Parser) -> Statement {
+    parser.expect(&Token::Keyword(Keyword::Return));
+
+    let t = parser.peek();
+
+    if t == Some(&Token::Semicolon) {
+        // return without expression
+        parser.next();
+        Statement::Return(None)
+    } else {
+        let expr = parse_expression(parser);
+
+        parser.expect(&Token::Semicolon);
+
+        return Statement::Return(Some(expr));
+    }
 }
 
 fn parse_expression(parser: &mut Parser) -> Expression {
@@ -458,7 +500,9 @@ mod tests {
         let mut parser = make_parser(tokens);
         let stmt = parse_statement(&mut parser);
         match stmt {
-            Statement::Return(Some(Expression::IntegerLiteral(n))) => assert_eq!(n, 100),
+            BlockItem::Statement(Statement::Return(Some(Expression::IntegerLiteral(n)))) => {
+                assert_eq!(n, 100)
+            }
             _ => panic!("expected Return(IntegerLiteral(100))"),
         }
     }
@@ -476,12 +520,14 @@ mod tests {
         let stmt = parse_statement(&mut parser);
 
         match stmt {
-            Statement::Return(Some(Expression::BinaryOperation(Operator::Addition, lhs, rhs))) => {
-                match (*lhs, *rhs) {
-                    (Expression::IntegerLiteral(9), Expression::IntegerLiteral(11)) => {}
-                    _ => panic!("expected Addition(9, 11)"),
-                }
-            }
+            BlockItem::Statement(Statement::Return(Some(Expression::BinaryOperation(
+                Operator::Addition,
+                lhs,
+                rhs,
+            )))) => match (*lhs, *rhs) {
+                (Expression::IntegerLiteral(9), Expression::IntegerLiteral(11)) => {}
+                _ => panic!("expected Addition(9, 11)"),
+            },
             _ => panic!("expected Return(Addition(..))"),
         }
     }
@@ -499,11 +545,11 @@ mod tests {
         let stmt = parse_statement(&mut parser);
 
         match stmt {
-            Statement::Return(Some(Expression::BinaryOperation(
+            BlockItem::Statement(Statement::Return(Some(Expression::BinaryOperation(
                 Operator::Subtraction,
                 lhs,
                 rhs,
-            ))) => match (*lhs, *rhs) {
+            )))) => match (*lhs, *rhs) {
                 (Expression::IntegerLiteral(10), Expression::IntegerLiteral(3)) => {}
                 _ => panic!("expected Subtraction(10, 3)"),
             },
@@ -524,11 +570,11 @@ mod tests {
         let stmt = parse_statement(&mut parser);
 
         match stmt {
-            Statement::Return(Some(Expression::BinaryOperation(
+            BlockItem::Statement(Statement::Return(Some(Expression::BinaryOperation(
                 Operator::Multiplication,
                 lhs,
                 rhs,
-            ))) => match (*lhs, *rhs) {
+            )))) => match (*lhs, *rhs) {
                 (Expression::IntegerLiteral(4), Expression::IntegerLiteral(5)) => {}
                 _ => panic!("expected Multiplication(4, 5)"),
             },
@@ -549,12 +595,14 @@ mod tests {
         let stmt = parse_statement(&mut parser);
 
         match stmt {
-            Statement::Return(Some(Expression::BinaryOperation(Operator::Division, lhs, rhs))) => {
-                match (*lhs, *rhs) {
-                    (Expression::IntegerLiteral(20), Expression::IntegerLiteral(4)) => {}
-                    _ => panic!("expected Division(20, 4)"),
-                }
-            }
+            BlockItem::Statement(Statement::Return(Some(Expression::BinaryOperation(
+                Operator::Division,
+                lhs,
+                rhs,
+            )))) => match (*lhs, *rhs) {
+                (Expression::IntegerLiteral(20), Expression::IntegerLiteral(4)) => {}
+                _ => panic!("expected Division(20, 4)"),
+            },
             _ => panic!("expected Return(Division(..))"),
         }
     }
@@ -578,7 +626,11 @@ mod tests {
         let stmt = parse_statement(&mut parser);
 
         match stmt {
-            Statement::Return(Some(Expression::BinaryOperation(Operator::Addition, lhs, rhs))) => {
+            BlockItem::Statement(Statement::Return(Some(Expression::BinaryOperation(
+                Operator::Addition,
+                lhs,
+                rhs,
+            )))) => {
                 match *rhs {
                     Expression::IntegerLiteral(5) => {}
                     _ => panic!("expected right side to be 5"),
@@ -616,7 +668,7 @@ mod tests {
         let stmt = parse_statement(&mut parser);
 
         match stmt {
-            Statement::Return(Some(Expression::UnaryOperation(op, expr))) => {
+            BlockItem::Statement(Statement::Return(Some(Expression::UnaryOperation(op, expr)))) => {
                 assert!(matches!(op, Operator::NumericNegation));
                 match *expr {
                     Expression::IntegerLiteral(42) => {}
@@ -639,7 +691,7 @@ mod tests {
         let stmt = parse_statement(&mut parser);
 
         match stmt {
-            Statement::Return(Some(Expression::UnaryOperation(op, expr))) => {
+            BlockItem::Statement(Statement::Return(Some(Expression::UnaryOperation(op, expr)))) => {
                 assert!(matches!(op, Operator::LogicalNegation));
                 match *expr {
                     Expression::IntegerLiteral(1) => {}
@@ -662,7 +714,7 @@ mod tests {
         let stmt = parse_statement(&mut parser);
 
         match stmt {
-            Statement::Return(Some(Expression::UnaryOperation(op, expr))) => {
+            BlockItem::Statement(Statement::Return(Some(Expression::UnaryOperation(op, expr)))) => {
                 assert!(matches!(op, Operator::BitwiseNegation));
                 match *expr {
                     Expression::IntegerLiteral(15) => {}
@@ -685,7 +737,7 @@ mod tests {
         let stmt = parse_statement(&mut parser);
 
         match stmt {
-            Statement::Return(Some(Expression::UnaryOperation(op, expr))) => {
+            BlockItem::Statement(Statement::Return(Some(Expression::UnaryOperation(op, expr)))) => {
                 assert!(matches!(op, Operator::Sizeof));
                 match *expr {
                     Expression::IntegerLiteral(10) => {}
@@ -708,7 +760,7 @@ mod tests {
         let stmt = parse_statement(&mut parser);
 
         match stmt {
-            Statement::Return(Some(Expression::UnaryOperation(op, expr))) => {
+            BlockItem::Statement(Statement::Return(Some(Expression::UnaryOperation(op, expr)))) => {
                 assert!(matches!(op, Operator::PrefixIncrement));
                 match *expr {
                     Expression::Identifier(ref name) => assert_eq!(name, "x"),
@@ -731,7 +783,7 @@ mod tests {
         let stmt = parse_statement(&mut parser);
 
         match stmt {
-            Statement::Return(Some(Expression::UnaryOperation(op, expr))) => {
+            BlockItem::Statement(Statement::Return(Some(Expression::UnaryOperation(op, expr)))) => {
                 assert!(matches!(op, Operator::PrefixDecrement));
                 match *expr {
                     Expression::Identifier(ref name) => assert_eq!(name, "y"),
@@ -754,7 +806,7 @@ mod tests {
         let stmt = parse_statement(&mut parser);
 
         match stmt {
-            Statement::Return(Some(Expression::UnaryOperation(op, expr))) => {
+            BlockItem::Statement(Statement::Return(Some(Expression::UnaryOperation(op, expr)))) => {
                 assert!(matches!(op, Operator::AddressOf));
                 match *expr {
                     Expression::Identifier(ref name) => assert_eq!(name, "p"),
@@ -777,7 +829,7 @@ mod tests {
         let stmt = parse_statement(&mut parser);
 
         match stmt {
-            Statement::Return(Some(Expression::UnaryOperation(op, expr))) => {
+            BlockItem::Statement(Statement::Return(Some(Expression::UnaryOperation(op, expr)))) => {
                 assert!(matches!(op, Operator::Dereference));
                 match *expr {
                     Expression::Identifier(ref name) => assert_eq!(name, "p"),
@@ -801,7 +853,11 @@ mod tests {
         let stmt = parse_statement(&mut parser);
 
         match stmt {
-            Statement::Return(Some(Expression::BinaryOperation(op, lhs, rhs))) => {
+            BlockItem::Statement(Statement::Return(Some(Expression::BinaryOperation(
+                op,
+                lhs,
+                rhs,
+            )))) => {
                 assert!(matches!(op, Operator::LogicalAnd));
                 match (*lhs, *rhs) {
                     (Expression::IntegerLiteral(1), Expression::IntegerLiteral(0)) => {}
@@ -825,7 +881,11 @@ mod tests {
         let stmt = parse_statement(&mut parser);
 
         match stmt {
-            Statement::Return(Some(Expression::BinaryOperation(op, lhs, rhs))) => {
+            BlockItem::Statement(Statement::Return(Some(Expression::BinaryOperation(
+                op,
+                lhs,
+                rhs,
+            )))) => {
                 assert!(matches!(op, Operator::LogicalOr));
                 match (*lhs, *rhs) {
                     (Expression::IntegerLiteral(1), Expression::IntegerLiteral(0)) => {}
@@ -849,7 +909,11 @@ mod tests {
         let stmt = parse_statement(&mut parser);
 
         match stmt {
-            Statement::Return(Some(Expression::BinaryOperation(op, lhs, rhs))) => {
+            BlockItem::Statement(Statement::Return(Some(Expression::BinaryOperation(
+                op,
+                lhs,
+                rhs,
+            )))) => {
                 assert!(matches!(op, Operator::Equal));
                 match (*lhs, *rhs) {
                     (Expression::IntegerLiteral(5), Expression::IntegerLiteral(5)) => {}
@@ -873,7 +937,11 @@ mod tests {
         let stmt = parse_statement(&mut parser);
 
         match stmt {
-            Statement::Return(Some(Expression::BinaryOperation(op, lhs, rhs))) => {
+            BlockItem::Statement(Statement::Return(Some(Expression::BinaryOperation(
+                op,
+                lhs,
+                rhs,
+            )))) => {
                 assert!(matches!(op, Operator::NotEqual));
                 match (*lhs, *rhs) {
                     (Expression::IntegerLiteral(3), Expression::IntegerLiteral(7)) => {}
@@ -897,7 +965,11 @@ mod tests {
         let stmt = parse_statement(&mut parser);
 
         match stmt {
-            Statement::Return(Some(Expression::BinaryOperation(op, lhs, rhs))) => {
+            BlockItem::Statement(Statement::Return(Some(Expression::BinaryOperation(
+                op,
+                lhs,
+                rhs,
+            )))) => {
                 assert!(matches!(op, Operator::LessThan));
                 match (*lhs, *rhs) {
                     (Expression::IntegerLiteral(2), Expression::IntegerLiteral(8)) => {}
@@ -921,7 +993,11 @@ mod tests {
         let stmt = parse_statement(&mut parser);
 
         match stmt {
-            Statement::Return(Some(Expression::BinaryOperation(op, lhs, rhs))) => {
+            BlockItem::Statement(Statement::Return(Some(Expression::BinaryOperation(
+                op,
+                lhs,
+                rhs,
+            )))) => {
                 assert!(matches!(op, Operator::GreaterThan));
                 match (*lhs, *rhs) {
                     (Expression::IntegerLiteral(10), Expression::IntegerLiteral(4)) => {}
@@ -945,7 +1021,11 @@ mod tests {
         let stmt = parse_statement(&mut parser);
 
         match stmt {
-            Statement::Return(Some(Expression::BinaryOperation(op, lhs, rhs))) => {
+            BlockItem::Statement(Statement::Return(Some(Expression::BinaryOperation(
+                op,
+                lhs,
+                rhs,
+            )))) => {
                 assert!(matches!(op, Operator::LessThanOrEqual));
                 match (*lhs, *rhs) {
                     (Expression::IntegerLiteral(6), Expression::IntegerLiteral(6)) => {}
@@ -969,7 +1049,11 @@ mod tests {
         let stmt = parse_statement(&mut parser);
 
         match stmt {
-            Statement::Return(Some(Expression::BinaryOperation(op, lhs, rhs))) => {
+            BlockItem::Statement(Statement::Return(Some(Expression::BinaryOperation(
+                op,
+                lhs,
+                rhs,
+            )))) => {
                 assert!(matches!(op, Operator::GreaterThanOrEqual));
                 match (*lhs, *rhs) {
                     (Expression::IntegerLiteral(9), Expression::IntegerLiteral(9)) => {}

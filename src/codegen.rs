@@ -28,7 +28,28 @@ fn gen_function_definition(codegen: &mut Codegen, func: &crate::parser::Function
     codegen.result.push_str("  mov fp, sp\n");
 
     for stmt in &func.body {
-        gen_statement(codegen, stmt, &mut variable_map, &mut stack_offset);
+        gen_block_item(codegen, stmt, &mut variable_map, &mut stack_offset);
+    }
+}
+
+fn gen_block_item(
+    codegen: &mut Codegen,
+    item: &crate::parser::BlockItem,
+    variable_map: &mut HashMap<String, i32>,
+    stack_offset: &mut i32,
+) {
+    match item {
+        crate::parser::BlockItem::Statement(stmt) => {
+            gen_statement(codegen, stmt, variable_map, stack_offset);
+        }
+        crate::parser::BlockItem::Declaration(name, expr) => {
+            gen_expression(codegen, expr.as_ref().unwrap(), variable_map);
+            codegen
+                .result
+                .push_str(&format!("  str x0, [sp, #-0x10]!\n"));
+            variable_map.insert(name.clone(), *stack_offset);
+            *stack_offset -= 16;
+        }
     }
 }
 
@@ -49,13 +70,26 @@ fn gen_statement(
         Statement::Expression(expression) => {
             gen_expression(codegen, expression, variable_map);
         }
-        Statement::Declaration(name, expression) => {
-            gen_expression(codegen, expression.as_ref().unwrap(), variable_map);
-            codegen
-                .result
-                .push_str(&format!("  str x0, [sp, #-0x10]!\n"));
-            variable_map.insert(name.clone(), *stack_offset);
-            *stack_offset -= 16;
+        Statement::If(expression, block_items, block_items1) => {
+            let label_else = random_label(codegen);
+            let label_end = random_label(codegen);
+
+            gen_expression(codegen, expression, variable_map);
+            codegen.result.push_str("  cmp x0, #0\n");
+            codegen.result.push_str(&format!("  beq {label_else}\n"));
+
+            for item in block_items {
+                gen_block_item(codegen, item, variable_map, stack_offset);
+            }
+
+            codegen.result.push_str(&format!("  b {label_end}\n"));
+            codegen.result.push_str(&format!("{label_else}:\n"));
+
+            for item in block_items1 {
+                gen_block_item(codegen, item, variable_map, stack_offset);
+            }
+
+            codegen.result.push_str(&format!("{label_end}:\n"));
         }
     }
 }
