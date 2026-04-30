@@ -20,6 +20,7 @@ pub(crate) enum Statement {
     Expression(Expression),
     Return(Option<Expression>),
     If(Expression, Vec<BlockItem>, Vec<BlockItem>),
+    Compound(Vec<BlockItem>),
 }
 
 pub(crate) enum Expression {
@@ -148,6 +149,9 @@ fn parse_statement(parser: &mut Parser) -> BlockItem {
         BlockItem::Statement(parse_return_statement(parser))
     } else if next == Some(&Token::Keyword(Keyword::If)) {
         parse_if(parser)
+    } else if next == Some(&Token::OpenCurly) {
+        let stmts = parse_block(parser);
+        BlockItem::Statement(Statement::Compound(stmts))
     } else {
         let stmt = Statement::Expression(parse_expression(parser));
         parser.expect(&Token::Semicolon);

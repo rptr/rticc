@@ -15,4 +15,6 @@ find "$1" -type f | sort | while read -r file; do
     else
         echo -e "${RED}FAIL${NC}: $file"
     fi
+    base="${file%.c}"
+    rm -f "$base.s" "$base"
 done

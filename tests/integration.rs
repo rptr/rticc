@@ -59,4 +59,5 @@ make_tests!("",
     int_add, "int_add.c" => 139,
     if_, "if.c" => 100,
     if_else, "if_else.c" => 200,
+    scope, "scope.c" => 55,
 );
