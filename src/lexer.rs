@@ -412,7 +412,7 @@ fn identifier(ch: char, chars: &mut Peekable<impl Iterator<Item = char>>, tokens
     while let Some(ch) = chars.peek() {
         let ch = *ch;
 
-        if ch.is_alphanumeric() {
+        if ch.is_alphanumeric() || ch == '_' {
             identifier_str += ch.to_string().as_str();
             chars.next();
         } else if is_whitespace_or_operator(ch) {
