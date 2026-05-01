@@ -376,19 +376,34 @@ fn number(ch: char, chars: &mut Peekable<impl Iterator<Item = char>>, tokens: &m
         if ch.is_numeric() {
             number_str += ch.to_string().as_str();
             chars.next();
-        } else if ch.is_whitespace()
-            || ch == '('
-            || ch == ')'
-            || ch == '{'
-            || ch == '}'
-            || ch == ';'
-        {
+        } else if is_whitespace_or_operator(ch) {
             tokens.push(Token::Constant(Constant::Int(number_str.parse().unwrap())));
             return;
         } else {
             panic!("lexing number, invalid character: {ch}");
         }
     }
+}
+
+fn is_whitespace_or_operator(ch: char) -> bool {
+    ch.is_whitespace()
+        || ch == '('
+        || ch == ')'
+        || ch == '{'
+        || ch == '}'
+        || ch == ';'
+        || ch == '+'
+        || ch == '-'
+        || ch == '*'
+        || ch == '/'
+        || ch == '%'
+        || ch == '&'
+        || ch == '|'
+        || ch == '^'
+        || ch == '!'
+        || ch == '='
+        || ch == '<'
+        || ch == '>'
 }
 
 fn identifier(ch: char, chars: &mut Peekable<impl Iterator<Item = char>>, tokens: &mut Vec<Token>) {
@@ -400,13 +415,7 @@ fn identifier(ch: char, chars: &mut Peekable<impl Iterator<Item = char>>, tokens
         if ch.is_alphanumeric() {
             identifier_str += ch.to_string().as_str();
             chars.next();
-        } else if ch.is_whitespace()
-            || ch == '('
-            || ch == ')'
-            || ch == '{'
-            || ch == '}'
-            || ch == ';'
-        {
+        } else if is_whitespace_or_operator(ch) {
             let kw = keyword(identifier_str.as_str());
 
             if kw.is_some() {
