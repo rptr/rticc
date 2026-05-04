@@ -28,13 +28,7 @@ fn gen_function_definition(codegen: &mut Codegen, func: &crate::parser::Function
     codegen.result.push_str("  mov fp, sp\n");
 
     for stmt in &func.body {
-        let mut scope_variable_map: HashMap<String, i32> = HashMap::new();
-
-        for (k, v) in &variable_map {
-            scope_variable_map.insert(k.clone(), *v);
-        }
-
-        gen_block_item(codegen, stmt, &mut scope_variable_map, &mut stack_offset);
+        gen_block_item(codegen, stmt, &mut variable_map, &mut stack_offset);
     }
 }
 

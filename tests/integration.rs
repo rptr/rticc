@@ -60,4 +60,5 @@ make_tests!("",
     if_, "if.c" => 100,
     if_else, "if_else.c" => 200,
     scope, "scope.c" => 55,
+    inner_scope_affects_outer, "scope_2.c" => 100,
 );
