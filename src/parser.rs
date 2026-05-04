@@ -20,6 +20,14 @@ pub(crate) enum Statement {
     Expression(Expression),
     Return(Option<Expression>),
     If(Expression, Vec<BlockItem>, Vec<BlockItem>),
+    For(
+        Option<Expression>,
+        Option<Expression>,
+        Option<Expression>,
+        Vec<BlockItem>,
+    ),
+    While(Expression, Vec<BlockItem>),
+    DoWhile(Vec<BlockItem>, Expression),
     Compound(Vec<BlockItem>),
 }
 
@@ -118,13 +126,13 @@ fn parse_block(parser: &mut Parser) -> Vec<BlockItem> {
     let mut stmts = vec![];
 
     loop {
-        let blockitem = parse_block_item(parser);
-
-        stmts.push(blockitem);
-
         if parser.peek() == Some(&Token::CloseCurly) {
             break;
         }
+
+        let blockitem = parse_block_item(parser);
+
+        stmts.push(blockitem);
     }
 
     parser.expect(&Token::CloseCurly);
@@ -152,6 +160,12 @@ fn parse_statement(parser: &mut Parser) -> BlockItem {
     } else if next == Some(&Token::OpenCurly) {
         let stmts = parse_block(parser);
         BlockItem::Statement(Statement::Compound(stmts))
+    } else if next == Some(&Token::Keyword(Keyword::For)) {
+        parse_for(parser)
+    } else if next == Some(&Token::Keyword(Keyword::While)) {
+        parse_while(parser)
+    } else if next == Some(&Token::Keyword(Keyword::Do)) {
+        parse_do(parser)
     } else {
         let stmt = Statement::Expression(parse_expression(parser));
         parser.expect(&Token::Semicolon);
@@ -177,6 +191,65 @@ fn parse_if(parser: &mut Parser) -> BlockItem {
     };
 
     BlockItem::Statement(Statement::If(condition, then_branch, else_branch))
+}
+
+fn parse_for(parser: &mut Parser) -> BlockItem {
+    parser.expect(&Token::Keyword(Keyword::For));
+    parser.expect(&Token::OpenParen);
+
+    let init = if parser.peek() != Some(&Token::Semicolon) {
+        Some(parse_expression(parser))
+    } else {
+        None
+    };
+    parser.expect(&Token::Semicolon);
+
+    let condition = if parser.peek() != Some(&Token::Semicolon) {
+        Some(parse_expression(parser))
+    } else {
+        None
+    };
+    parser.expect(&Token::Semicolon);
+
+    let increment = if parser.peek() != Some(&Token::CloseParen) {
+        Some(parse_expression(parser))
+    } else {
+        None
+    };
+    parser.expect(&Token::CloseParen);
+
+    let body = parse_block(parser);
+
+    BlockItem::Statement(Statement::For(init, condition, increment, body))
+}
+
+fn parse_while(parser: &mut Parser) -> BlockItem {
+    parser.expect(&Token::Keyword(Keyword::While));
+    parser.expect(&Token::OpenParen);
+
+    let condition = parse_expression(parser);
+
+    parser.expect(&Token::CloseParen);
+
+    let body = parse_block(parser);
+
+    BlockItem::Statement(Statement::While(condition, body))
+}
+
+fn parse_do(parser: &mut Parser) -> BlockItem {
+    parser.expect(&Token::Keyword(Keyword::Do));
+
+    let body = parse_block(parser);
+
+    parser.expect(&Token::Keyword(Keyword::While));
+    parser.expect(&Token::OpenParen);
+
+    let condition = parse_expression(parser);
+
+    parser.expect(&Token::CloseParen);
+    parser.expect(&Token::Semicolon);
+
+    BlockItem::Statement(Statement::DoWhile(body, condition))
 }
 
 fn parse_declaration(parser: &mut Parser) -> BlockItem {

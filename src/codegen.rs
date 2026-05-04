@@ -102,6 +102,34 @@ fn gen_statement(
                 gen_block_item(codegen, item, &mut scope_variable_map, stack_offset);
             }
         }
+        Statement::For(init, condition, increment, body) => {
+            let start_label = random_label(codegen);
+            let end_label = random_label(codegen);
+
+            gen_expression(codegen, init.as_ref().unwrap(), variable_map);
+
+            codegen.result.push_str(&format!("{start_label}:\n"));
+
+            gen_expression(codegen, condition.as_ref().unwrap(), variable_map);
+
+            codegen.result.push_str("  cmp x0, #0\n");
+            codegen.result.push_str(&format!("  beq {end_label}\n"));
+
+            for item in body {
+                gen_block_item(codegen, item, variable_map, stack_offset);
+            }
+
+            gen_expression(codegen, increment.as_ref().unwrap(), variable_map);
+
+            codegen.result.push_str(&format!("  b {start_label}\n"));
+            codegen.result.push_str(&format!("{end_label}:\n"));
+        }
+        Statement::While(condition, body) => {
+            todo!()
+        }
+        Statement::DoWhile(body, condition) => {
+            todo!()
+        }
     }
 }
 
