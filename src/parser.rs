@@ -29,6 +29,8 @@ pub(crate) enum Statement {
     While(Expression, Vec<BlockItem>),
     DoWhile(Vec<BlockItem>, Expression),
     Compound(Vec<BlockItem>),
+    Break,
+    Continue,
 }
 
 pub(crate) enum Expression {
@@ -166,6 +168,14 @@ fn parse_statement(parser: &mut Parser) -> BlockItem {
         parse_while(parser)
     } else if next == Some(&Token::Keyword(Keyword::Do)) {
         parse_do(parser)
+    } else if next == Some(&Token::Keyword(Keyword::Break)) {
+        parser.next();
+        parser.expect(&Token::Semicolon);
+        BlockItem::Statement(Statement::Break)
+    } else if next == Some(&Token::Keyword(Keyword::Continue)) {
+        parser.next();
+        parser.expect(&Token::Semicolon);
+        BlockItem::Statement(Statement::Continue)
     } else {
         let stmt = Statement::Expression(parse_expression(parser));
         parser.expect(&Token::Semicolon);

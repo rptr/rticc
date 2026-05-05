@@ -64,5 +64,7 @@ make_tests!("",
     while_, "while.c" => 7,
     do_, "do.c" => 12,
     for_, "for.c" => 7,
-    for_declare_inside, "for_declare_inside.c" => 2
+    for_declare_inside, "for_declare_inside.c" => 2,
+    for_break, "for_break.c" => 3,
+    for_continue, "for_continue.c" => 100,
 );

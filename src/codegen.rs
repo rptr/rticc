@@ -123,6 +123,22 @@ fn gen_statement(
         Statement::DoWhile(body, condition) => {
             gen_do_while(codegen, body, condition, variable_map, stack_offset)
         }
+        Statement::Break => {
+            if codegen.loop_end.is_empty() {
+                panic!("break statement not inside loop");
+            }
+
+            let end_label = codegen.loop_end.last().unwrap();
+            codegen.result.push_str(&format!("  b {end_label}\n"));
+        }
+        Statement::Continue => {
+            if codegen.loop_start.is_empty() {
+                panic!("continue statement not inside loop");
+            }
+
+            let start_label = codegen.loop_start.last().unwrap();
+            codegen.result.push_str(&format!("  b {start_label}\n"));
+        }
     }
 }
 
