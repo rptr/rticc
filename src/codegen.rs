@@ -5,12 +5,16 @@ use crate::parser::{Expression, Operator, Program, Statement};
 struct Codegen {
     pub label_counter: u64,
     pub result: String,
+    pub loop_start: Vec<String>,
+    pub loop_end: Vec<String>,
 }
 
 pub(crate) fn generate(program: Program) -> String {
     let mut codegen = Codegen {
         label_counter: 0,
         result: String::new(),
+        loop_start: Vec::new(),
+        loop_end: Vec::new(),
     };
 
     gen_function_definition(&mut codegen, &program.func);
@@ -103,26 +107,15 @@ fn gen_statement(
             }
         }
         Statement::For(init, condition, increment, body) => {
-            let start_label = random_label(codegen);
-            let end_label = random_label(codegen);
-
-            gen_expression(codegen, init.as_ref().unwrap(), variable_map);
-
-            codegen.result.push_str(&format!("{start_label}:\n"));
-
-            gen_expression(codegen, condition.as_ref().unwrap(), variable_map);
-
-            codegen.result.push_str("  cmp x0, #0\n");
-            codegen.result.push_str(&format!("  beq {end_label}\n"));
-
-            for item in body {
-                gen_block_item(codegen, item, variable_map, stack_offset);
-            }
-
-            gen_expression(codegen, increment.as_ref().unwrap(), variable_map);
-
-            codegen.result.push_str(&format!("  b {start_label}\n"));
-            codegen.result.push_str(&format!("{end_label}:\n"));
+            gen_for(
+                codegen,
+                init,
+                condition,
+                increment,
+                body,
+                variable_map,
+                stack_offset,
+            );
         }
         Statement::While(condition, body) => {
             gen_while(codegen, condition, body, variable_map, stack_offset)
@@ -131,6 +124,48 @@ fn gen_statement(
             gen_do_while(codegen, body, condition, variable_map, stack_offset)
         }
     }
+}
+
+fn gen_for(
+    codegen: &mut Codegen,
+    init: &Option<Expression>,
+    condition: &Option<Expression>,
+    increment: &Option<Expression>,
+    body: &[crate::parser::BlockItem],
+    variable_map: &mut HashMap<String, i32>,
+    stack_offset: &mut i32,
+) {
+    let start_label = random_label(codegen);
+    let end_label = random_label(codegen);
+
+    codegen.loop_start.push(start_label.clone());
+    codegen.loop_end.push(end_label.clone());
+
+    if let Some(init) = init {
+        gen_expression(codegen, init, variable_map);
+    }
+
+    codegen.result.push_str(&format!("{start_label}:\n"));
+
+    if let Some(condition) = condition {
+        gen_expression(codegen, condition, variable_map);
+        codegen.result.push_str("  cmp x0, #0\n");
+        codegen.result.push_str(&format!("  beq {end_label}\n"));
+    }
+
+    for item in body {
+        gen_block_item(codegen, item, variable_map, stack_offset);
+    }
+
+    if let Some(increment) = increment {
+        gen_expression(codegen, increment, variable_map);
+    }
+
+    codegen.result.push_str(&format!("  b {start_label}\n"));
+    codegen.result.push_str(&format!("{end_label}:\n"));
+
+    codegen.loop_start.pop();
+    codegen.loop_end.pop();
 }
 
 fn gen_while(
@@ -142,6 +177,9 @@ fn gen_while(
 ) {
     let start_label = random_label(codegen);
     let end_label = random_label(codegen);
+
+    codegen.loop_start.push(start_label.clone());
+    codegen.loop_end.push(end_label.clone());
 
     codegen.result.push_str(&format!("{start_label}:\n"));
 
@@ -156,6 +194,9 @@ fn gen_while(
 
     codegen.result.push_str(&format!("  b {start_label}\n"));
     codegen.result.push_str(&format!("{end_label}:\n"));
+
+    codegen.loop_start.pop();
+    codegen.loop_end.pop();
 }
 
 fn gen_do_while(
@@ -168,6 +209,9 @@ fn gen_do_while(
     let start_label = random_label(codegen);
     let end_label = random_label(codegen);
 
+    codegen.loop_start.push(start_label.clone());
+    codegen.loop_end.push(end_label.clone());
+
     codegen.result.push_str(&format!("{start_label}:\n"));
 
     for item in body {
@@ -179,6 +223,9 @@ fn gen_do_while(
     codegen.result.push_str("  cmp x0, #0\n");
     codegen.result.push_str(&format!("  bne {start_label}\n"));
     codegen.result.push_str(&format!("{end_label}:\n"));
+
+    codegen.loop_start.pop();
+    codegen.loop_end.pop();
 }
 
 fn gen_expression(
