@@ -125,12 +125,60 @@ fn gen_statement(
             codegen.result.push_str(&format!("{end_label}:\n"));
         }
         Statement::While(condition, body) => {
-            todo!()
+            gen_while(codegen, condition, body, variable_map, stack_offset)
         }
         Statement::DoWhile(body, condition) => {
-            todo!()
+            gen_do_while(codegen, body, condition, variable_map, stack_offset)
         }
     }
+}
+
+fn gen_while(
+    codegen: &mut Codegen,
+    condition: &Expression,
+    body: &[crate::parser::BlockItem],
+    variable_map: &mut HashMap<String, i32>,
+    stack_offset: &mut i32,
+) {
+    let start_label = random_label(codegen);
+    let end_label = random_label(codegen);
+
+    codegen.result.push_str(&format!("{start_label}:\n"));
+
+    gen_expression(codegen, condition, variable_map);
+
+    codegen.result.push_str("  cmp x0, #0\n");
+    codegen.result.push_str(&format!("  beq {end_label}\n"));
+
+    for item in body {
+        gen_block_item(codegen, item, variable_map, stack_offset);
+    }
+
+    codegen.result.push_str(&format!("  b {start_label}\n"));
+    codegen.result.push_str(&format!("{end_label}:\n"));
+}
+
+fn gen_do_while(
+    codegen: &mut Codegen,
+    body: &[crate::parser::BlockItem],
+    condition: &Expression,
+    variable_map: &mut HashMap<String, i32>,
+    stack_offset: &mut i32,
+) {
+    let start_label = random_label(codegen);
+    let end_label = random_label(codegen);
+
+    codegen.result.push_str(&format!("{start_label}:\n"));
+
+    for item in body {
+        gen_block_item(codegen, item, variable_map, stack_offset);
+    }
+
+    gen_expression(codegen, condition, variable_map);
+
+    codegen.result.push_str("  cmp x0, #0\n");
+    codegen.result.push_str(&format!("  bne {start_label}\n"));
+    codegen.result.push_str(&format!("{end_label}:\n"));
 }
 
 fn gen_expression(

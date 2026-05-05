@@ -4,7 +4,7 @@ int main()
 
     while (x < 7)
     {
-        x++;
+        x = x + 1;
     }
 
     return x;

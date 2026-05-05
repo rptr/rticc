@@ -62,7 +62,7 @@ make_tests!("",
     scope, "scope.c" => 55,
     inner_scope_affects_outer, "scope_2.c" => 100,
     while_, "while.c" => 7,
-    do_, "do.c" => 7,
+    do_, "do.c" => 12,
     for_, "for.c" => 7,
     for_declare_inside, "for_declare_inside.c" => 2
 );
