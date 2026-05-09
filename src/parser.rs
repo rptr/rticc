@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use crate::lexer::{Constant, Keyword, Token};
 
 pub(crate) struct Program {
-    pub(crate) func: FunctionDefinition,
+    pub(crate) funcs: Vec<FunctionDefinition>,
 }
 
 pub(crate) struct FunctionDefinition {
@@ -39,6 +39,7 @@ pub(crate) enum Expression {
     UnaryOperation(Operator, Box<Expression>),
     BinaryOperation(Operator, Box<Expression>, Box<Expression>),
     Assignment(String, Box<Expression>),
+    FunctionCall(String, Vec<Expression>),
 }
 
 pub(crate) enum Operator {
@@ -90,10 +91,14 @@ impl Parser {
 
 pub(crate) fn parse(tokens: Vec<Token>) -> Program {
     let mut parser = Parser { tokens, index: 0 };
+    let mut funcs = vec![];
 
-    let func_decl = parse_function_definition(&mut parser);
+    while (parser.peek().is_some()) {
+        let func = parse_function_definition(&mut parser);
+        funcs.push(func);
+    }
 
-    Program { func: func_decl }
+    Program { funcs }
 }
 
 fn parse_function_definition(parser: &mut Parser) -> FunctionDefinition {
@@ -472,6 +477,12 @@ fn parse_term(parser: &mut Parser) -> Expression {
 }
 
 fn parse_factor(parser: &mut Parser) -> Expression {
+    if let Some(Token::Identifier(x)) = parser.peek() {
+        if parser.tokens.get(parser.index + 1) == Some(&Token::OpenParen) {
+            return parse_function_call_or_identifier(parser, x.clone());
+        }
+    }
+
     let t = parser.next();
 
     if t.is_none() {
@@ -485,7 +496,6 @@ fn parse_factor(parser: &mut Parser) -> Expression {
             expr
         }
         Token::Constant(Constant::Int(n)) => Expression::IntegerLiteral(*n),
-        Token::Identifier(name) => Expression::Identifier(name.clone()),
         Token::Minus => {
             let operand = parse_expression(parser);
             Expression::UnaryOperation(Operator::NumericNegation, Box::new(operand))
@@ -519,6 +529,16 @@ fn parse_factor(parser: &mut Parser) -> Expression {
             Expression::UnaryOperation(Operator::Dereference, Box::new(operand))
         }
         _ => panic!("unexpected token in factor: {:?}", t),
+    }
+}
+
+fn parse_function_call_or_identifier(parser: &mut Parser, name: String) -> Expression {
+    if parser.peek() == Some(&Token::OpenParen) {
+        parser.next();
+        parser.next();
+        Expression::FunctionCall(name.clone(), vec![])
+    } else {
+        Expression::Identifier(name.clone())
     }
 }
 

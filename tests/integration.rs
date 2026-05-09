@@ -67,4 +67,6 @@ make_tests!("",
     for_declare_inside, "for_declare_inside.c" => 2,
     for_break, "for_break.c" => 3,
     for_continue, "for_continue.c" => 100,
+    func, "func.c" => 57,
+    func_args, "func_add.c" => 18,
 );

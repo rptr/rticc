@@ -17,7 +17,9 @@ pub(crate) fn generate(program: Program) -> String {
         loop_end: Vec::new(),
     };
 
-    gen_function_definition(&mut codegen, &program.func);
+    for func in program.funcs {
+        gen_function_definition(&mut codegen, &func);
+    }
 
     codegen.result
 }
@@ -349,6 +351,20 @@ fn gen_expression(
             codegen
                 .result
                 .push_str(&format!("  ldr x0, [fp, #{}]\n", offset));
+        }
+        Expression::FunctionCall(name, args) => {
+            for arg in args.iter().rev() {
+                gen_expression(codegen, arg, variable_map);
+                codegen.result.push_str("  str x0, [sp, #-0x10]!\n");
+            }
+
+            codegen.result.push_str(&format!("  bl _{}\n", name));
+
+            if !args.is_empty() {
+                codegen
+                    .result
+                    .push_str(&format!("  add sp, sp, #{}\n", args.len() * 16));
+            }
         }
     }
 }
