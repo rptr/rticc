@@ -3,12 +3,9 @@ use std::path::Path;
 use std::process::Command;
 
 fn run_test(c_file: &Path, return_value: i32) {
-    let compile = Command::new("cargo")
-        .args(["run", "--bin", "rticc", "--", c_file.to_str().unwrap()])
-        .status()
-        .expect("failed to run compiler");
-
-    assert!(compile.success(), "compilation failed for {:?}", c_file);
+    let path_str = c_file.to_str().unwrap();
+    rticc::compile(path_str)
+        .unwrap_or_else(|e| panic!("compilation failed for {:?}: {}", c_file, e));
 
     let binary = c_file.with_extension("");
     let run = Command::new(&binary)
