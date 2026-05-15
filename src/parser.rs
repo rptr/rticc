@@ -478,9 +478,7 @@ fn parse_term(parser: &mut Parser) -> Expression {
 
 fn parse_factor(parser: &mut Parser) -> Expression {
     if let Some(Token::Identifier(x)) = parser.peek() {
-        if parser.tokens.get(parser.index + 1) == Some(&Token::OpenParen) {
-            return parse_function_call_or_identifier(parser, x.clone());
-        }
+        return parse_function_call_or_identifier(parser);
     }
 
     let t = parser.next();
@@ -532,7 +530,13 @@ fn parse_factor(parser: &mut Parser) -> Expression {
     }
 }
 
-fn parse_function_call_or_identifier(parser: &mut Parser, name: String) -> Expression {
+fn parse_function_call_or_identifier(parser: &mut Parser) -> Expression {
+    let name = if let Some(Token::Identifier(name)) = parser.next() {
+        name.clone()
+    } else {
+        panic!("expected identifier");
+    };
+
     if parser.peek() == Some(&Token::OpenParen) {
         parser.next();
         parser.next();
