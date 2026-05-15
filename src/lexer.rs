@@ -404,6 +404,9 @@ fn is_whitespace_or_operator(ch: char) -> bool {
         || ch == '='
         || ch == '<'
         || ch == '>'
+        || ch == '?'
+        || ch == ':'
+        || ch == ','
 }
 
 fn identifier(ch: char, chars: &mut Peekable<impl Iterator<Item = char>>, tokens: &mut Vec<Token>) {

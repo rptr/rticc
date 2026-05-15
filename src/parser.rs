@@ -6,9 +6,20 @@ pub(crate) struct Program {
     pub(crate) funcs: Vec<FunctionDefinition>,
 }
 
+pub(crate) enum DataType {
+    Int,
+    Void,
+}
+
+pub(crate) struct FunctionParameter {
+    pub(crate) name: String,
+    pub(crate) _type: DataType,
+}
+
 pub(crate) struct FunctionDefinition {
     pub(crate) name: String,
     pub(crate) body: Vec<BlockItem>,
+    pub(crate) parameters: Vec<FunctionParameter>,
 }
 
 pub(crate) enum BlockItem {
@@ -120,11 +131,48 @@ fn parse_function_definition(parser: &mut Parser) -> FunctionDefinition {
         parser.next();
     }
 
+    let mut parameters = vec![];
+
+    if parser.peek() != Some(&Token::CloseParen) {
+        loop {
+            if parser.peek() == Some(&Token::Keyword(Keyword::Void)) {
+                parser.next();
+                break;
+            }
+
+            // TODO other types
+            parser.expect(&Token::Keyword(Keyword::Int));
+
+            let arg_name = if let Some(Token::Identifier(name)) = parser.peek() {
+                name.clone()
+            } else {
+                panic!("expected argument name identifier");
+            };
+
+            parameters.push(FunctionParameter {
+                name: arg_name,
+                _type: DataType::Int,
+            });
+
+            parser.next();
+
+            if parser.peek() == Some(&Token::CloseParen) {
+                break;
+            }
+
+            parser.expect(&Token::Comma);
+        }
+    }
+
     parser.expect(&Token::CloseParen);
 
     let stmts = parse_block(parser);
 
-    FunctionDefinition { name, body: stmts }
+    FunctionDefinition {
+        name,
+        body: stmts,
+        parameters,
+    }
 }
 
 fn parse_block(parser: &mut Parser) -> Vec<BlockItem> {
@@ -539,8 +587,25 @@ fn parse_function_call_or_identifier(parser: &mut Parser) -> Expression {
 
     if parser.peek() == Some(&Token::OpenParen) {
         parser.next();
+
+        // TODO parse arguments
+        let mut args = vec![];
+
+        if parser.peek() != Some(&Token::CloseParen) {
+            loop {
+                let arg = parse_expression(parser);
+                args.push(arg);
+
+                if parser.peek() == Some(&Token::CloseParen) {
+                    break;
+                }
+
+                parser.expect(&Token::Comma);
+            }
+        }
+
         parser.next();
-        Expression::FunctionCall(name.clone(), vec![])
+        Expression::FunctionCall(name.clone(), args)
     } else {
         Expression::Identifier(name.clone())
     }
